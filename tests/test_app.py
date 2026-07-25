@@ -1,12 +1,11 @@
 from config import TestConfig
 from app import create_app
-from models import Post, Product, db
+from models import Product, db
 from services import generate_post, run_seo_audit
 
 
 def make_app():
-    app = create_app(TestConfig)
-    return app
+    return create_app(TestConfig)
 
 
 def csrf(client, path="/admin/login"):
@@ -73,9 +72,10 @@ def test_fallback_generation_publish_sitemap_and_audit():
         assert "sponsored" in post.content_html
         result = run_seo_audit()
         assert result["published_posts"] == 1
+        post_slug = post.slug
 
     with app.test_client() as client:
-        assert client.get(f"/blog/{post.slug}").status_code == 200
+        assert client.get(f"/blog/{post_slug}").status_code == 200
         sitemap = client.get("/sitemap.xml")
         assert sitemap.status_code == 200
-        assert post.slug.encode() in sitemap.data
+        assert post_slug.encode() in sitemap.data
