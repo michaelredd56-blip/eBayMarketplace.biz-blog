@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | {{ site_name }}{% endblock %}
+{% block content %}
+<section class="page-hero"><div class="container"><span class="eyebrow">Browse the blog</span><h1>{{ title }}</h1>{% if not query %}<p>Product research and practical buying considerations.</p>{% endif %}</div></section>
+<section class="container section-block"><div class="card-grid">{% for post in posts.items %}<article class="post-card"><a class="card-image" href="{{ url_for('article', slug=post.slug) }}">{% if post.product and post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% else %}<span>{{ post.category }}</span>{% endif %}</a><div class="card-body"><span class="card-category">{{ post.category }}</span><h3><a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a></h3><p>{{ post.excerpt }}</p><div class="card-meta"><span>{{ post.published_at|datefmt }}</span><a href="{{ url_for('article', slug=post.slug) }}">Read →</a></div></div></article>{% else %}<div class="empty-state"><h3>No posts found.</h3><p>Try a different search.</p></div>{% endfor %}</div>{% include "pagination.html" %}</section>
+{% endblock %}

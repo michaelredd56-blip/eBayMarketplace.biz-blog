@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="admin-shell">
+  <aside class="admin-sidebar">
+    <strong>Blog Control Center</strong>
+    <nav><a href="{{ url_for('admin_dashboard') }}">Overview</a><a href="{{ url_for('admin_products') }}">Products</a><a href="{{ url_for('admin_posts') }}">Posts</a><a href="{{ url_for('admin_seo') }}">SEO Repairs</a><a href="{{ url_for('admin_gsc') }}">Search Console</a><a href="{{ url_for('index') }}">View Blog</a></nav>
+    <form method="post" action="{{ url_for('admin_logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button danger full" type="submit">Sign out</button></form>
+  </aside>
+  <section class="admin-main">{% block admin_content %}{% endblock %}</section>
+</div>
+{% endblock %}

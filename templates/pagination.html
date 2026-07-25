@@ -1,0 +1,15 @@
+{% if posts and posts.pages > 1 %}
+<nav class="pagination" aria-label="Pagination">
+  {% if posts.has_prev %}
+    {% if request.endpoint == 'category' %}<a href="{{ url_for('category', category=request.view_args.category, page=posts.prev_num) }}">← Previous</a>
+    {% elif request.endpoint == 'search' %}<a href="{{ url_for('search', q=query, page=posts.prev_num) }}">← Previous</a>
+    {% else %}<a href="{{ url_for('index', page=posts.prev_num) }}">← Previous</a>{% endif %}
+  {% endif %}
+  <span>Page {{ posts.page }} of {{ posts.pages }}</span>
+  {% if posts.has_next %}
+    {% if request.endpoint == 'category' %}<a href="{{ url_for('category', category=request.view_args.category, page=posts.next_num) }}">Next →</a>
+    {% elif request.endpoint == 'search' %}<a href="{{ url_for('search', q=query, page=posts.next_num) }}">Next →</a>
+    {% else %}<a href="{{ url_for('index', page=posts.next_num) }}">Next →</a>{% endif %}
+  {% endif %}
+</nav>
+{% endif %}

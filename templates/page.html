@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | {{ site_name }}{% endblock %}
+{% block content %}
+<section class="page-hero"><div class="container narrow"><h1>{{ title }}</h1></div></section>
+<section class="container narrow prose legal-copy">
+{% if page_key == 'about' %}
+<h2>Practical product research</h2><p>{{ site_name }} publishes product-focused buying guides built around products curated through eBayMarketplace.biz. Our goal is to help readers understand what to verify before purchasing—not to replace the live listing or seller terms.</p><p>Articles may be created with editorial automation and are reviewed through technical quality checks. We do not claim to personally test every item, and readers should always confirm condition, specifications, shipping, returns, warranty information, and seller feedback on the current listing.</p>
+{% elif page_key == 'privacy' %}
+<h2>Information collected</h2><p>This website may collect standard server logs, session data needed for administration, and aggregate performance information. The public blog does not require an account.</p><h2>Third-party services</h2><p>Outbound links may lead to eBay, eBayMarketplace.biz, Google, or other third-party services. Their privacy practices apply once you leave this website.</p><h2>Administration and security</h2><p>Administrative sessions use secure cookies and access controls. OAuth credentials and refresh tokens are stored encrypted in the application database.</p><h2>Contact</h2><p>Questions about this policy may be directed through the contact information published by the site owner.</p>
+{% else %}
+<p><strong>Affiliate disclosure:</strong> Some links on this website are affiliate links. The publisher may earn a commission from qualifying purchases made through those links at no additional cost to the buyer.</p><p>Product prices, availability, condition, shipping, seller policies, and other listing details may change. Always review the live listing before purchasing. Affiliate relationships do not change the goal of presenting useful, balanced buying considerations.</p>
+{% endif %}
+</section>
+{% endblock %}

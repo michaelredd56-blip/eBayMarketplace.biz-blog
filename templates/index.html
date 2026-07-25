@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ site_name }} | Independent Product Guides{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">Independent shopping research</span>
+      <h1>Find useful products without digging through endless listings.</h1>
+      <p>Clear product overviews, buying questions, and curated links to help you compare options with more confidence.</p>
+      <form class="search-form" action="{{ url_for('search') }}" method="get">
+        <label class="sr-only" for="home-search">Search product guides</label>
+        <input id="home-search" name="q" placeholder="Search guides and products">
+        <button type="submit">Search</button>
+      </form>
+    </div>
+    <div class="hero-visual">
+      {% for product in featured_products[:4] %}
+        <a class="mini-product" href="{{ product.source_url }}">
+          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% endif %}
+          <span>{{ product.title }}</span>
+        </a>
+      {% else %}
+        <div class="hero-placeholder"><span>Smart finds</span><span>Buying guides</span><span>Curated deals</span></div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+{% if categories %}
+<section class="container category-strip" aria-label="Popular categories">
+  {% for name, count in categories %}<a href="{{ url_for('category', category=name|lower|replace(' ', '-')) }}">{{ name }} <small>{{ count }}</small></a>{% endfor %}
+</section>
+{% endif %}
+
+<section class="container section-block">
+  <div class="section-heading"><div><span class="eyebrow">Latest articles</span><h2>Fresh product guides</h2></div></div>
+  <div class="card-grid">
+    {% for post in posts.items %}
+      <article class="post-card">
+        <a class="card-image" href="{{ url_for('article', slug=post.slug) }}">
+          {% if post.product and post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% else %}<span>{{ post.category }}</span>{% endif %}
+        </a>
+        <div class="card-body">
+          <span class="card-category">{{ post.category }}</span>
+          <h3><a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a></h3>
+          <p>{{ post.excerpt }}</p>
+          <div class="card-meta"><span>{{ post.published_at|datefmt }}</span><a href="{{ url_for('article', slug=post.slug) }}">Read guide →</a></div>
+        </div>
+      </article>
+    {% else %}
+      <div class="empty-state"><h3>The blog is ready.</h3><p>Sign in to the admin panel, import products, and generate the first article.</p></div>
+    {% endfor %}
+  </div>
+  {% include "pagination.html" %}
+</section>
+
+{% if featured_products %}
+<section class="marketplace-band">
+  <div class="container">
+    <div class="section-heading light"><div><span class="eyebrow">From eBayMarketplace.biz</span><h2>Recently curated products</h2></div><a class="button secondary" href="{{ source_site_url }}">Browse marketplace</a></div>
+    <div class="product-grid">
+      {% for product in featured_products %}
+        <a class="product-tile" href="{{ product.source_url }}">
+          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% endif %}
+          <span>{{ product.category }}</span><strong>{{ product.title }}</strong>
+          {% if product.price %}<em>{{ product.price|money(product.currency) }}</em>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

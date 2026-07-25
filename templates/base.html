@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_name }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}{{ site_tagline }}{% endblock %}">
+  <link rel="canonical" href="{% block canonical %}{{ request.base_url }}{% endblock %}">
+  <link rel="alternate" type="application/rss+xml" title="{{ site_name }} RSS" href="{{ url_for('feed') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+  <div class="container header-inner">
+    <a class="brand" href="{{ url_for('index') }}" aria-label="{{ site_name }} home">
+      <span class="brand-mark">MF</span>
+      <span><strong>{{ site_name }}</strong><small>{{ site_tagline }}</small></span>
+    </a>
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-nav">Menu</button>
+    <nav id="primary-nav" class="primary-nav" aria-label="Primary navigation">
+      <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('about') }}">About</a>
+      <a href="{{ source_site_url }}" rel="noopener">Shop Marketplace</a>
+      {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
+    </nav>
+  </div>
+</header>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="container alerts" role="status">
+      {% for category, message in messages %}<div class="alert alert-{{ category }}">{{ message }}</div>{% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<main>{% block content %}{% endblock %}</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div><strong>{{ site_name }}</strong><p>{{ site_tagline }}.</p></div>
+    <div><strong>Information</strong><a href="{{ url_for('about') }}">About</a><a href="{{ url_for('privacy') }}">Privacy</a><a href="{{ url_for('affiliate_disclosure') }}">Affiliate Disclosure</a></div>
+    <div><strong>Explore</strong><a href="{{ source_site_url }}">eBayMarketplace.biz</a><a href="{{ url_for('feed') }}">RSS Feed</a><a href="{{ url_for('sitemap') }}">Sitemap</a></div>
+  </div>
+  <div class="container footer-bottom">© {{ current_year }} {{ site_name }}. Product availability and pricing may change.</div>
+</footer>
+<script src="{{ url_for('static', filename='site.js') }}" defer></script>
+</body>
+</html>
