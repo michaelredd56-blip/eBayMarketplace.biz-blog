@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+from bs4 import BeautifulSoup
+
 import services
 from admin_enhancements import install_admin_enhancements
 from app import create_app
@@ -124,7 +126,7 @@ def test_review_save_and_publish_goes_live_with_manual_product_image():
         assert saved.product.image_url == image_url
 
 
-def test_generated_article_recovers_verified_product_image(monkeypatch):
+def test_generated_article_recovers_and_embeds_verified_product_image(monkeypatch):
     app = create_app(TestConfig)
 
     with app.app_context():
@@ -132,16 +134,45 @@ def test_generated_article_recovers_verified_product_image(monkeypatch):
         db.session.add(product)
         db.session.flush()
         post = _post(product, "generated", "published")
+        post.content_html = "<p>Opening product overview.</p><h2>Key features</h2><p>Details.</p>"
         db.session.add(post)
         db.session.commit()
 
+        image_url = "https://images.example.com/generated-product.jpg"
         monkeypatch.setattr(
             services,
             "extract_product",
-            lambda _url: {"image_url": "https://images.example.com/generated-product.jpg"},
+            lambda _url: {"image_url": image_url},
         )
-        fake_service_layer = SimpleNamespace(generate_post=lambda *args, **kwargs: post)
-        install_generation_image_enhancement(fake_service_layer)
-        generated = fake_service_layer.generate_post()
 
-        assert generated.product.image_url == "https://images.example.com/generated-product.jpg"
+        calls = []
+
+        def original_generate(*args, **kwargs):
+            calls.append((args, kwargs))
+            return post
+
+        fake_service_layer = SimpleNamespace(generate_post=original_generate)
+        install_generation_image_enhancement(fake_service_layer)
+
+        # No arguments represents random product generation.
+        random_generated = fake_service_layer.generate_post()
+        # A product_id represents the administrator explicitly choosing a product.
+        selected_generated = fake_service_layer.generate_post(product.id, publish=True)
+
+        assert random_generated is post
+        assert selected_generated is post
+        assert calls == [
+            ((), {}),
+            ((product.id,), {"publish": True}),
+        ]
+        assert post.product.image_url == image_url
+
+        soup = BeautifulSoup(post.content_html, "html.parser")
+        embedded_images = soup.select(f'img[src="{image_url}"]')
+        assert len(embedded_images) == 1
+        assert embedded_images[0].get("alt") == product.title
+        assert embedded_images[0].get("loading") == "lazy"
+        figure = embedded_images[0].find_parent("figure")
+        assert figure is not None
+        assert figure.find("figcaption").get_text(" ", strip=True) == f"Featured product: {product.title}"
+        assert figure.find_next_sibling("h2") is not None
