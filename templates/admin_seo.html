@@ -30,7 +30,7 @@
 
 <section class="panel">
   <div class="panel-heading"><h2>SEO findings</h2></div>
-  <p class="notice">Safe repairs are limited to deterministic metadata and link changes. Missing images and thin articles are review items because the system will not invent text or attach an unverified image.</p>
+  <p class="notice">Every article now has an explicit publishing action. Product pictures are pulled from the verified product source when available, and you can add the correct image URL from Review Content.</p>
   <div class="issue-list">
     {% for row in issue_rows %}
     {% set issue = row.issue %}
@@ -45,13 +45,12 @@
         <span class="status status-{{ 'active' if issue.auto_fixable else 'inactive' }}">{{ 'safe fix' if issue.auto_fixable else 'review content' }}</span>
         {% if post %}
         <a class="button secondary compact" href="{{ url_for('admin_post_edit', post_id=post.id, next=url_for('admin_seo')) }}">Review Content</a>
-        {% if post.status == 'draft' %}
         <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
-          <button class="button compact" type="submit">Publish</button>
+          <button class="button compact" type="submit">{{ 'Publish Live Now' if post.status == 'draft' else 'Republish Live' }}</button>
         </form>
-        {% else %}
+        {% if post.status == 'published' %}
         <a class="text-button" href="{{ url_for('article', slug=post.slug) }}" target="_blank" rel="noopener">View Live</a>
         <form method="post" action="{{ url_for('admin_post_unpublish', post_id=post.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -76,7 +75,7 @@
 </section>
 
 <section class="panel">
-  <div class="panel-heading"><div><h2>Draft content review queue</h2><p class="muted">Open a draft to review the full article, publish it when ready, or delete it.</p></div><span class="status status-draft">{{ review_queue|length }} drafts</span></div>
+  <div class="panel-heading"><div><h2>Draft content review queue</h2><p class="muted">Review the full article, publish it live immediately, or delete it.</p></div><span class="status status-draft">{{ review_queue|length }} drafts</span></div>
   <div class="review-queue">
     {% for post in review_queue %}
     <article class="review-card">
@@ -86,7 +85,7 @@
         <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
-          <button class="button compact" type="submit">Publish</button>
+          <button class="button compact" type="submit">Publish Live Now</button>
         </form>
         <form method="post" action="{{ url_for('admin_post_delete', post_id=post.id) }}" data-confirm="Delete this draft permanently? This cannot be undone.">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
