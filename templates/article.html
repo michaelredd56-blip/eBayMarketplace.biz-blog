@@ -8,16 +8,7 @@
 <meta property="og:description" content="{{ post.meta_description }}">
 <meta property="og:url" content="{{ canonical }}">
 {% if post.product and post.product.image_url %}<meta property="og:image" content="{{ post.product.image_url }}">{% endif %}
-<script type="application/ld+json">{{ {
-  "@context": "https://schema.org",
-  "@type": "Article",
-  "headline": post.title,
-  "description": post.meta_description,
-  "datePublished": post.published_at.isoformat() if post.published_at else "",
-  "dateModified": post.updated_at.isoformat(),
-  "mainEntityOfPage": canonical,
-  "image": [post.product.image_url] if post.product and post.product.image_url else []
-}|tojson }}</script>
+<script type="application/ld+json">{{ article_schema|tojson }}</script>
 {% endblock %}
 {% block content %}
 <article class="article-shell">
@@ -40,8 +31,8 @@
       {% if post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% endif %}
       <h2>{{ post.product.title }}</h2>
       {% if post.product.price %}<strong>{{ post.product.price|money(post.product.currency) }}</strong>{% endif %}
-      <a class="button" href="{{ post.product.affiliate_url }}" target="_blank" rel="sponsored noopener nofollow">View current listing</a>
-      <a class="text-link" href="{{ post.product.source_url }}">See curated marketplace page</a>
+      <a class="button" href="{{ post.product.affiliate_url }}" target="_blank" rel="sponsored noopener nofollow">{{ post.product.title }}</a>
+      <a class="text-link" href="{{ post.product.source_url }}" rel="noopener">See curated marketplace page</a>
       <small>Price, condition, and availability are controlled by the seller and may change.</small>
     </aside>
     {% endif %}

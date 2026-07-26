@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hmac
+import threading
 import os
 import secrets
 from datetime import datetime, timezone
@@ -25,22 +26,16 @@ from sqlalchemy import desc, func
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-import gsc
 from config import Config
-from models import AutomationRun, OAuthToken, Post, Product, SEOIssue, db, utcnow
+from models import AutomationRun, Post, Product, SEOIssue, db, utcnow
 from services import (
     add_manual_product,
     apply_seo_fixes,
-    delete_oauth_token,
     generate_post,
     import_products,
     publish_post,
     run_automation_cycle,
     run_seo_audit,
-    save_oauth_token,
-    sync_search_console_signals,
-    record_url_inspection,
-    setting_set,
     update_post,
 )
 
@@ -184,8 +179,46 @@ def register_routes(app: Flask) -> None:
             .limit(3)
             .all()
         )
-        canonical = f"{app.config['SITE_URL']}/blog/{post.slug}"
-        return render_template("article.html", post=post, related=related, canonical=canonical)
+        canonical = url_for("article", slug=post.slug, _external=True)
+        blog_post = {
+            "@type": "BlogPosting",
+            "headline": post.title,
+            "description": post.meta_description,
+            "url": canonical,
+            "mainEntityOfPage": {"@type": "WebPage", "@id": canonical},
+            "datePublished": post.published_at.isoformat() if post.published_at else "",
+            "dateModified": post.updated_at.isoformat(),
+            "publisher": {
+                "@type": "Organization",
+                "name": app.config["SITE_NAME"],
+                "url": request.url_root.rstrip("/"),
+            },
+        }
+        graph = [blog_post]
+        if post.product:
+            product_id = canonical + "#product"
+            product_schema = {
+                "@type": "Product",
+                "@id": product_id,
+                "name": post.product.title,
+                "description": post.product.description or post.excerpt,
+                "url": post.product.affiliate_url,
+                "offers": {"@type": "Offer", "url": post.product.affiliate_url},
+            }
+            if post.product.image_url:
+                product_schema["image"] = [post.product.image_url]
+                blog_post["image"] = [post.product.image_url]
+            if post.product.brand:
+                product_schema["brand"] = {"@type": "Brand", "name": post.product.brand}
+            if post.product.price:
+                product_schema["offers"]["price"] = post.product.price
+                product_schema["offers"]["priceCurrency"] = post.product.currency or "USD"
+            blog_post["mainEntity"] = {"@id": product_id}
+            graph.append(product_schema)
+        article_schema = {"@context": "https://schema.org", "@graph": graph}
+        return render_template(
+            "article.html", post=post, related=related, canonical=canonical, article_schema=article_schema
+        )
 
     @app.get("/category/<path:category>")
     def category(category: str):
@@ -224,18 +257,28 @@ def register_routes(app: Flask) -> None:
 
     @app.get("/robots.txt")
     def robots():
-        body = f"User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: {app.config['SITE_URL']}/sitemap.xml\n"
+        body = f"User-agent: *\nAllow: /\nDisallow: /admin/\nSitemap: {url_for('sitemap', _external=True)}\n"
         return Response(body, mimetype="text/plain")
 
     @app.get("/sitemap.xml")
     def sitemap():
-        static_urls = [
-            (app.config["SITE_URL"] + "/", utcnow()),
-            (app.config["SITE_URL"] + "/about", utcnow()),
-            (app.config["SITE_URL"] + "/affiliate-disclosure", utcnow()),
-        ]
+        base_url = request.url_root.rstrip("/")
         posts = Post.query.filter_by(status="published").order_by(desc(Post.updated_at)).all()
-        return Response(render_template("sitemap.xml", static_urls=static_urls, posts=posts), mimetype="application/xml")
+        home_modified = posts[0].updated_at if posts else utcnow()
+        static_urls = [
+            (base_url + "/", home_modified, "daily", "1.0"),
+            (base_url + "/about", home_modified, "monthly", "0.5"),
+            (base_url + "/privacy", home_modified, "yearly", "0.3"),
+            (base_url + "/affiliate-disclosure", home_modified, "yearly", "0.3"),
+        ]
+        response = Response(
+            render_template("sitemap.xml", static_urls=static_urls, posts=posts, base_url=base_url),
+            content_type="application/xml; charset=utf-8",
+        )
+        response.headers["Cache-Control"] = "public, max-age=300"
+        response.set_etag(f"{int(home_modified.timestamp())}-{len(posts)}")
+        response.last_modified = home_modified
+        return response
 
     @app.get("/feed.xml")
     def feed():
@@ -384,8 +427,11 @@ def register_routes(app: Flask) -> None:
     @admin_required
     def admin_seo_audit():
         result = run_seo_audit()
-        gsc_result = sync_search_console_signals()
-        flash(f"Audit completed. {result['open_issues']} open issues; {result['auto_fixable']} can be repaired automatically. Search Console sync: {gsc_result['status']}.", "success")
+        flash(
+            f"Audit completed. {result['open_issues']} open issues; "
+            f"{result['auto_fixable']} can be repaired automatically.",
+            "success",
+        )
         return redirect(url_for("admin_seo"))
 
     @app.post("/admin/seo/fix")
@@ -402,113 +448,6 @@ def register_routes(app: Flask) -> None:
         flash(f"Automation cycle finished with status: {result['status']}.", "success" if result["status"] == "completed" else "warning")
         return redirect(url_for("admin_dashboard"))
 
-    @app.get("/admin/gsc")
-    @admin_required
-    def admin_gsc():
-        connected = OAuthToken.query.filter_by(provider="google_search_console").first() is not None
-        properties = []
-        metrics = None
-        sitemaps = []
-        error = None
-        if connected:
-            try:
-                properties = gsc.list_properties()
-                metrics = gsc.performance()
-                sitemaps = gsc.list_sitemaps()
-            except Exception as exc:
-                app.logger.exception("Search Console data request failed")
-                error = str(exc)
-        return render_template(
-            "admin_gsc.html",
-            connected=connected,
-            configured=gsc.configured(),
-            properties=properties,
-            metrics=metrics,
-            sitemaps=sitemaps,
-            selected_property=gsc.selected_property(),
-            error=error,
-        )
-
-    @app.get("/admin/gsc/connect")
-    @admin_required
-    def admin_gsc_connect():
-        if not gsc.configured():
-            flash("Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Render before connecting.", "danger")
-            return redirect(url_for("admin_gsc"))
-        flow = gsc.make_flow()
-        authorization_url, state = flow.authorization_url(
-            access_type="offline",
-            include_granted_scopes="true",
-            prompt="consent",
-        )
-        session["google_oauth_state"] = state
-        return redirect(authorization_url)
-
-    @app.get("/admin/gsc/callback")
-    @admin_required
-    def admin_gsc_callback():
-        state = session.pop("google_oauth_state", None)
-        if not state or state != request.args.get("state"):
-            abort(400, description="Invalid OAuth state.")
-        flow = gsc.make_flow(state=state)
-        flow.fetch_token(authorization_response=request.url)
-        creds = flow.credentials
-        save_oauth_token("google_search_console", {
-            "token": creds.token,
-            "refresh_token": creds.refresh_token,
-            "token_uri": creds.token_uri,
-            "client_id": creds.client_id,
-            "client_secret": creds.client_secret,
-            "scopes": list(creds.scopes or gsc.SCOPES),
-        })
-        flash("Google Search Console connected successfully.", "success")
-        return redirect(url_for("admin_gsc"))
-
-    @app.post("/admin/gsc/disconnect")
-    @admin_required
-    def admin_gsc_disconnect():
-        delete_oauth_token("google_search_console")
-        flash("Google Search Console disconnected.", "success")
-        return redirect(url_for("admin_gsc"))
-
-    @app.post("/admin/gsc/property")
-    @admin_required
-    def admin_gsc_property():
-        property_url = request.form.get("property_url", "").strip()
-        if not property_url:
-            flash("Select a Search Console property.", "danger")
-        else:
-            setting_set("gsc_property", property_url)
-            flash("Search Console property saved.", "success")
-        return redirect(url_for("admin_gsc"))
-
-    @app.post("/admin/gsc/sitemap")
-    @admin_required
-    def admin_gsc_sitemap():
-        sitemap_url = f"{app.config['SITE_URL']}/sitemap.xml"
-        try:
-            gsc.submit_sitemap(sitemap_url)
-            flash(f"Submitted {sitemap_url} to Search Console.", "success")
-        except Exception as exc:
-            app.logger.exception("Sitemap submission failed")
-            flash(f"Sitemap submission failed: {exc}", "danger")
-        return redirect(url_for("admin_gsc"))
-
-    @app.post("/admin/gsc/inspect")
-    @admin_required
-    def admin_gsc_inspect():
-        inspection_url = request.form.get("inspection_url", "").strip()
-        if not inspection_url.startswith(app.config["SITE_URL"]):
-            flash("The inspected URL must belong to this blog.", "danger")
-            return redirect(url_for("admin_gsc"))
-        try:
-            result = gsc.inspect_url(inspection_url)
-            summary = record_url_inspection(inspection_url, result)
-            flash(f"URL inspection completed. Verdict: {summary['verdict']}; coverage: {summary['coverage']}.", "success" if summary["verdict"] == "PASS" else "warning")
-        except Exception as exc:
-            app.logger.exception("URL inspection failed")
-            flash(f"URL inspection failed: {exc}", "danger")
-        return redirect(url_for("admin_gsc"))
 
 
 def start_scheduler(app: Flask) -> None:
@@ -530,6 +469,14 @@ def start_scheduler(app: Flask) -> None:
     )
     scheduler.start()
     app.extensions["content_scheduler"] = scheduler
+
+    # Render free services can restart or sleep through the scheduled hour. Run one
+    # duplicate-protected cycle at startup so the blog still publishes once per day.
+    threading.Thread(
+        target=scheduled_cycle,
+        name="startup-content-cycle",
+        daemon=True,
+    ).start()
 
 
 def register_cli(app: Flask) -> None:

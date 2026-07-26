@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-{% for location, modified in static_urls %}<url><loc>{{ location }}</loc><lastmod>{{ modified.date().isoformat() }}</lastmod></url>{% endfor %}
-{% for post in posts %}<url><loc>{{ site_url }}/blog/{{ post.slug }}</loc><lastmod>{{ post.updated_at.date().isoformat() }}</lastmod></url>{% endfor %}
+{% for location, modified, frequency, priority in static_urls %}
+  <url><loc>{{ location }}</loc><lastmod>{{ modified.date().isoformat() }}</lastmod><changefreq>{{ frequency }}</changefreq><priority>{{ priority }}</priority></url>
+{% endfor %}
+{% for post in posts %}
+  <url><loc>{{ base_url }}/blog/{{ post.slug }}</loc><lastmod>{{ post.updated_at.date().isoformat() }}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>
+{% endfor %}
 </urlset>

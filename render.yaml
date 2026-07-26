@@ -16,8 +16,6 @@ services:
           property: connectionString
       - key: SECRET_KEY
         generateValue: true
-      - key: TOKEN_ENCRYPTION_KEY
-        sync: false
       - key: ADMIN_USERNAME
         value: admin
       - key: ADMIN_PASSWORD
@@ -26,8 +24,6 @@ services:
         value: Marketplace Finds
       - key: SITE_TAGLINE
         value: Useful product guides and smart shopping ideas
-      - key: SITE_URL
-        sync: false
       - key: SOURCE_SITE_URL
         value: https://ebaymarketplace.biz
       - key: SOURCE_SITEMAP_URL
@@ -36,16 +32,8 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4o-mini
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_REDIRECT_URI
-        sync: false
-      - key: GOOGLE_SEARCH_CONSOLE_PROPERTY
-        sync: false
       - key: AUTO_PUBLISH
-        value: "false"
+        value: "true"
       - key: SCHEDULER_ENABLED
         value: "true"
       - key: POSTS_PER_RUN
