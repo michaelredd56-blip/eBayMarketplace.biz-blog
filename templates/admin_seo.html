@@ -1,3 +1,52 @@
 {% extends "admin_base.html" %}
 {% block title %}SEO Repairs | {{ site_name }}{% endblock %}
-{% block admin_content %}<div class="admin-heading"><div><span class="eyebrow">Technical quality</span><h1>SEO audit and repairs</h1></div><div class="row-actions"><form method="post" action="{{ url_for('admin_seo_audit') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button secondary" type="submit">Run audit</button></form><form method="post" action="{{ url_for('admin_seo_fix') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="button" type="submit">Apply safe fixes</button></form></div></div><section class="panel"><p class="notice">Automatic repair is limited to low-risk website changes: metadata length, missing affiliate/source links, and contextual marketplace links. Thin content, duplicate targeting, and missing product images remain review items.</p><div class="issue-list">{% for issue in issues %}<article class="issue"><div><span class="severity severity-{{ issue.severity }}">{{ issue.severity }}</span><strong>{{ issue.issue_type|replace('-', ' ')|title }}</strong><p>{{ issue.details }}</p>{% if issue.page_url %}<a href="{{ issue.page_url }}" target="_blank">Open page</a>{% endif %}</div><span class="status status-{{ 'active' if issue.auto_fixable else 'inactive' }}">{{ 'auto-fixable' if issue.auto_fixable else 'review' }}</span></article>{% else %}<div class="empty-state"><h3>No open issues.</h3><p>Run an audit after publishing new content.</p></div>{% endfor %}</div></section>{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='seo-admin.css') }}">{% endblock %}
+{% block admin_content %}
+{% set fixable_issues = issues|selectattr('auto_fixable')|list %}
+{% set review_issues = issues|rejectattr('auto_fixable')|list %}
+<div class="admin-heading">
+  <div><span class="eyebrow">Technical quality</span><h1>SEO audit and repairs</h1></div>
+  <div class="row-actions">
+    <form method="post" action="{{ url_for('admin_seo_audit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button secondary" type="submit">Run fresh audit</button>
+    </form>
+    <form method="post" action="{{ url_for('admin_seo_fix') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if fixable_issues %}
+      <button class="button" type="submit">Apply {{ fixable_issues|length }} safe {{ 'fix' if fixable_issues|length == 1 else 'fixes' }}</button>
+      {% else %}
+      <button class="button" type="button" disabled title="The current findings require review rather than an automatic change.">No safe fixes available</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<section class="seo-summary" aria-label="SEO issue summary">
+  <div><span>Open findings</span><strong>{{ issues|length }}</strong></div>
+  <div><span>Safe automatic fixes</span><strong>{{ fixable_issues|length }}</strong></div>
+  <div><span>Needs review</span><strong>{{ review_issues|length }}</strong></div>
+</section>
+
+<section class="panel">
+  <p class="notice">The repair button now performs a fresh audit first and only counts changes that pass the follow-up audit. It can safely repair metadata length, duplicate meta titles, required product links, exact affiliate anchor text, contextual marketplace links, and product images that can be recovered from the source page.</p>
+  {% if issues and not fixable_issues %}
+  <p class="seo-review-note"><strong>The button previously reported zero because every current finding was a review item.</strong> Thin articles and images that cannot be recovered automatically remain listed so you can edit them without the system inventing content or using an unrelated image.</p>
+  {% endif %}
+  <div class="issue-list">
+    {% for issue in issues %}
+    <article class="issue">
+      <div>
+        <span class="severity severity-{{ issue.severity }}">{{ issue.severity }}</span>
+        <strong>{{ issue.issue_type|replace('-', ' ')|title }}</strong>
+        <p>{{ issue.details }}</p>
+        {% if issue.page_url %}<a href="{{ issue.page_url }}" target="_blank" rel="noopener">Open page</a>{% endif %}
+      </div>
+      <span class="status status-{{ 'active' if issue.auto_fixable else 'inactive' }}">{{ 'safe fix' if issue.auto_fixable else 'review' }}</span>
+    </article>
+    {% else %}
+    <div class="empty-state"><h3>No open issues.</h3><p>Run an audit after publishing new content.</p></div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
