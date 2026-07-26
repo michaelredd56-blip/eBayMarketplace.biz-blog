@@ -58,6 +58,7 @@ def clean_product_name(value: str) -> str:
     for pattern in ROBOTIC_TITLE_PATTERNS:
         cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s*[-–—|:]\s*(?:shop now|buy now|for sale)\s*$", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*(?:[-–—|:,]\s*)?(?:and|or)\s*$", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r"\s+([,.:;!?])", r"\1", cleaned)
     cleaned = re.sub(r"(?:\s*[-–—|:,]\s*){2,}", " — ", cleaned)
     cleaned = cleaned.strip(" ,:;|–—-")
