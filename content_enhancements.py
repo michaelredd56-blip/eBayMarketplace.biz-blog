@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 from flask import current_app
 
+from image_recovery import recover_product_image
 from models import Post, Product, db
 
 
@@ -14,26 +15,40 @@ def valid_image_url(value: str | None) -> bool:
 
 
 def refresh_product_image(product: Product | None) -> bool:
-    """Populate a missing product image only from the verified source product page."""
+    """Populate a missing product image from the curated page or live listing."""
     if not product or valid_image_url(product.image_url) or not product.source_url:
         return False
 
-    # Import lazily so this enhancement can be installed before app.py imports services.
+    # Use the existing structured product extractor first because it also follows
+    # the source site's canonical product fields.
     from services import extract_product
 
+    candidate = ""
     try:
         refreshed = extract_product(product.source_url)
+        candidate = (refreshed or {}).get("image_url", "").strip()
     except Exception:
         current_app.logger.warning(
-            "Could not refresh product image for product %s", product.id, exc_info=True
+            "Structured product image refresh failed for product %s",
+            product.id,
+            exc_info=True,
+        )
+
+    # The source site may serialize images in Next.js data, lazy-load attributes,
+    # or ordinary scripts instead of JSON-LD/og:image. The broader recovery path
+    # checks those formats and then the live affiliate listing as a fallback.
+    if not valid_image_url(candidate):
+        candidate = recover_product_image(product.source_url, product.affiliate_url)
+
+    if not valid_image_url(candidate):
+        current_app.logger.warning(
+            "No verified image could be recovered for product %s (%s)",
+            product.id,
+            product.title,
         )
         return False
 
-    candidate = (refreshed or {}).get("image_url", "").strip()
-    if not valid_image_url(candidate):
-        return False
-
-    product.image_url = candidate
+    product.image_url = candidate.strip()
     return True
 
 
@@ -59,12 +74,15 @@ def embed_product_image_in_article(post: Post | None) -> bool:
             return False
 
     figure = soup.new_tag("figure")
+    figure["class"] = "generated-product-image"
     image = soup.new_tag(
         "img",
         src=image_url,
         alt=post.product.title,
         loading="lazy",
     )
+    image["width"] = "900"
+    image["height"] = "675"
     figure.append(image)
 
     caption = soup.new_tag("figcaption")
