@@ -10,6 +10,9 @@ service_layer.apply_seo_fixes = apply_seo_fixes
 service_layer.run_seo_audit = run_seo_audit
 
 from app import app  # noqa: E402
+from admin_enhancements import install_admin_enhancements  # noqa: E402
+
+install_admin_enhancements(app)
 
 
 @app.get("/google8fa80b78c101f952.html")

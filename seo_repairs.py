@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from flask import current_app
 
 from models import Post, SEOIssue, db, utcnow
-from services import ensure_required_links, extract_product
+from services import ensure_required_links
 
 
 def _word_count(html: str) -> int:
@@ -67,11 +67,13 @@ def _unique_meta_title(post: Post) -> str:
         .all()
         if _clean_text(title)
     }
-
     candidates = [
         _fit_meta_title(post.title),
         _fit_meta_title(post.title, post.category or "Guide"),
-        _fit_meta_title(post.title, post.product.brand if post.product and post.product.brand else "Product Guide"),
+        _fit_meta_title(
+            post.title,
+            post.product.brand if post.product and post.product.brand else "Product Guide",
+        ),
         _fit_meta_title(post.title, f"Guide {post.id}"),
     ]
     for candidate in candidates:
@@ -90,17 +92,22 @@ def _truncate_description(text: str) -> str:
 
 def _build_meta_description(post: Post) -> str:
     body_text = BeautifulSoup(post.content_html or "", "html.parser").get_text(" ")
-    source = _clean_text(post.excerpt) or _clean_text(post.product.description if post.product else "") or _clean_text(body_text)
+    source = (
+        _clean_text(post.excerpt)
+        or _clean_text(post.product.description if post.product else "")
+        or _clean_text(body_text)
+    )
     if not source:
         source = f"Review {post.title} and the main factors to compare before buying."
 
     description = source
     if len(description) < 70:
         description = (
-            f"{description.rstrip('.')} Review key features, value, intended uses, and the current listing before buying."
+            f"{description.rstrip('.')} Review key features, value, intended uses, "
+            "and the current listing before buying."
         )
     if len(description) < 70:
-        description = f"{description} Compare product details and available alternatives before making a decision."
+        description += " Compare product details and alternatives before making a decision."
     return _truncate_description(description)
 
 
@@ -109,7 +116,6 @@ def run_seo_audit() -> dict:
     site_url = current_app.config["SITE_URL"]
     source_home = current_app.config["SOURCE_SITE_URL"]
     posts = Post.query.filter_by(status="published").order_by(Post.id).all()
-
     title_groups: dict[str, list[Post]] = defaultdict(list)
 
     for post in posts:
@@ -121,12 +127,20 @@ def run_seo_audit() -> dict:
         if not _clean_text(post.meta_description) or not 70 <= len(post.meta_description) <= 160:
             checks.append(("meta-description", "Meta description should be 70–160 characters.", True))
         if _word_count(post.content_html) < 500:
-            checks.append(("thin-content", "Article contains fewer than 500 words and needs additional original value.", False))
+            checks.append((
+                "thin-content",
+                "Article contains fewer than 500 words and needs an editorial review.",
+                False,
+            ))
 
         soup = BeautifulSoup(post.content_html or "", "html.parser")
         hrefs = [anchor.get("href", "") for anchor in soup.select("a[href]")]
         if post.product and post.product.source_url not in hrefs:
-            checks.append(("missing-source-link", "The article is missing its curated eBayMarketplace.biz product-page backlink.", True))
+            checks.append((
+                "missing-source-link",
+                "The article is missing its curated eBayMarketplace.biz product-page backlink.",
+                True,
+            ))
         if post.product and post.product.affiliate_url not in hrefs:
             checks.append(("missing-affiliate-link", "The article is missing the product affiliate link.", True))
         if post.product:
@@ -136,23 +150,23 @@ def run_seo_audit() -> dict:
                 if anchor.get("href", "") == post.product.affiliate_url
             ]
             if not matching or matching[0].get_text(" ", strip=True) != post.product.title:
-                checks.append(
-                    (
-                        "affiliate-anchor-text",
-                        "The affiliate link must use the exact product name as its visible anchor text.",
-                        True,
-                    )
-                )
+                checks.append((
+                    "affiliate-anchor-text",
+                    "The affiliate link must use the exact product name as its visible anchor text.",
+                    True,
+                ))
         if not any(href.rstrip("/") == source_home.rstrip("/") for href in hrefs):
-            checks.append(("missing-marketplace-link", "The article is missing a contextual link to eBayMarketplace.biz.", True))
+            checks.append((
+                "missing-marketplace-link",
+                "The article is missing a contextual link to eBayMarketplace.biz.",
+                True,
+            ))
         if post.product and not _clean_text(post.product.image_url):
-            checks.append(
-                (
-                    "missing-image",
-                    "The product has no image URL. Safe repair will retry the curated source page.",
-                    bool(post.product.source_url),
-                )
-            )
+            checks.append((
+                "missing-image",
+                "The product has no confirmed image URL. Review the product and add a correct image manually.",
+                False,
+            ))
 
         for issue_type, details, fixable in checks:
             key = f"post:{post.id}:{issue_type}"
@@ -192,11 +206,15 @@ def run_seo_audit() -> dict:
     }
 
 
-def apply_seo_fixes() -> int:
-    # Refresh the audit first so stale rows cannot make the button report a misleading result.
+def apply_seo_fixes() -> dict:
+    """Apply deterministic changes and report only findings verified as resolved."""
     run_seo_audit()
     issues = SEOIssue.query.filter_by(status="open", auto_fixable=True).all()
-    before_keys = {issue.issue_key for issue in issues}
+    attempted_keys = {issue.issue_key for issue in issues}
+    attempted_types = {issue.issue_key: issue.issue_type for issue in issues}
+
+    if not attempted_keys:
+        return {"attempted": 0, "applied": 0, "unresolved": 0, "unresolved_types": []}
 
     for issue in issues:
         match = re.match(r"^post:(\d+):", issue.issue_key)
@@ -206,29 +224,20 @@ def apply_seo_fixes() -> int:
         if not post:
             continue
 
-        if issue.issue_type in {"meta-title", "duplicate-meta-title"}:
-            post.meta_title = _unique_meta_title(post)
-        elif issue.issue_type == "meta-description":
-            post.meta_description = _build_meta_description(post)
-        elif issue.issue_type in {
-            "missing-source-link",
-            "missing-affiliate-link",
-            "affiliate-anchor-text",
-            "missing-marketplace-link",
-        } and post.product:
-            post.content_html = ensure_required_links(post.content_html, post.product)
-        elif issue.issue_type == "missing-image" and post.product and post.product.source_url:
-            try:
-                refreshed = extract_product(post.product.source_url)
-            except Exception:
-                current_app.logger.warning(
-                    "Could not refresh product image for post %s", post.id, exc_info=True
-                )
-                refreshed = None
-            if refreshed and _clean_text(refreshed.get("image_url")):
-                post.product.image_url = refreshed["image_url"]
-        else:
-            continue
+        try:
+            if issue.issue_type in {"meta-title", "duplicate-meta-title"}:
+                post.meta_title = _unique_meta_title(post)
+            elif issue.issue_type == "meta-description":
+                post.meta_description = _build_meta_description(post)
+            elif issue.issue_type in {
+                "missing-source-link",
+                "missing-affiliate-link",
+                "affiliate-anchor-text",
+                "missing-marketplace-link",
+            } and post.product:
+                post.content_html = ensure_required_links(post.content_html, post.product)
+        except Exception:
+            current_app.logger.exception("Safe SEO repair failed for %s", issue.issue_key)
 
     db.session.commit()
     run_seo_audit()
@@ -236,7 +245,13 @@ def apply_seo_fixes() -> int:
     remaining_keys = {
         issue.issue_key
         for issue in SEOIssue.query.filter(
-            SEOIssue.status == "open", SEOIssue.issue_key.in_(before_keys)
+            SEOIssue.status == "open", SEOIssue.issue_key.in_(attempted_keys)
         ).all()
     }
-    return len(before_keys - remaining_keys)
+    unresolved_types = sorted({attempted_types[key] for key in remaining_keys})
+    return {
+        "attempted": len(attempted_keys),
+        "applied": len(attempted_keys - remaining_keys),
+        "unresolved": len(remaining_keys),
+        "unresolved_types": unresolved_types,
+    }
