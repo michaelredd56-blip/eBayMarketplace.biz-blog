@@ -72,7 +72,7 @@ def test_all_admin_article_surfaces_show_explicit_publish_actions():
     assert b"Publish Live Now" in posts.data
     assert b"Republish Live" in posts.data
     assert review.status_code == 200
-    assert b"Save &amp; Publish Live Now" in review.data
+    assert b"Save & Publish Live Now" in review.data
     assert b"Verified product image URL" in review.data
 
 
