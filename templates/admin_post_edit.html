@@ -1,3 +1,58 @@
 {% extends "admin_base.html" %}
-{% block title %}Edit Post | {{ site_name }}{% endblock %}
-{% block admin_content %}<div class="admin-heading"><div><span class="eyebrow">{{ post.status }}</span><h1>Edit article</h1></div>{% if post.status == 'published' %}<a class="button secondary" href="{{ url_for('article', slug=post.slug) }}" target="_blank">View live</a>{% endif %}</div><form class="panel form-grid" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label class="wide">Title<input name="title" value="{{ post.title }}" required></label><label class="wide">Excerpt<textarea name="excerpt" rows="3" required>{{ post.excerpt }}</textarea></label><label>Meta title<input name="meta_title" maxlength="60" value="{{ post.meta_title }}"></label><label>Focus keyword<input name="focus_keyword" value="{{ post.focus_keyword or '' }}"></label><label class="wide">Meta description<textarea name="meta_description" rows="3" maxlength="160">{{ post.meta_description }}</textarea></label><label>Category<input name="category" value="{{ post.category }}"></label><label class="checkbox"><input type="checkbox" name="regenerate_slug" value="1"> Regenerate URL slug from the title</label><label class="wide">Article HTML<textarea class="code-editor" name="content_html" rows="28" required>{{ post.content_html }}</textarea></label><button class="button" type="submit">Save changes</button></form>{% endblock %}
+{% block title %}Review Article | {{ site_name }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='admin-review.css') }}">{% endblock %}
+{% block admin_content %}
+{% set return_to = request.args.get('next') or url_for('admin_posts') %}
+<div class="admin-heading review-heading">
+  <div><span class="eyebrow">{{ post.status }} content</span><h1>Review article</h1><p class="muted">Preview the article, edit any field, then publish it, move it to drafts, or delete it.</p></div>
+  <div class="row-actions review-toolbar">
+    <a class="button secondary" href="{{ return_to }}">Back</a>
+    {% if post.status == 'draft' %}
+    <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ return_to }}">
+      <button class="button" type="submit">Publish Article</button>
+    </form>
+    {% else %}
+    <a class="button secondary" href="{{ url_for('article', slug=post.slug) }}" target="_blank" rel="noopener">View Live</a>
+    <form method="post" action="{{ url_for('admin_post_unpublish', post_id=post.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ return_to }}">
+      <button class="button secondary" type="submit">Move to Draft</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/admin/posts/{{ post.id }}/delete" data-confirm="Delete this article permanently? This cannot be undone.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ return_to }}">
+      <button class="button danger" type="submit">Delete Article</button>
+    </form>
+  </div>
+</div>
+
+<section class="panel article-review-panel">
+  <div class="panel-heading"><div><h2>Article preview</h2><p class="muted">This is how the article content reads before or after publication.</p></div><span class="status status-{{ post.status }}">{{ post.status }}</span></div>
+  <article class="admin-article-preview">
+    <header>
+      <span class="card-category">{{ post.category }}</span>
+      <h1>{{ post.title }}</h1>
+      <p class="article-deck">{{ post.excerpt }}</p>
+      {% if post.product and post.product.image_url %}<img class="review-product-image" src="{{ post.product.image_url }}" alt="{{ post.product.title }}">{% endif %}
+    </header>
+    <div class="article-content">{{ post.content_html|safe }}</div>
+  </article>
+</section>
+
+<form class="panel form-grid review-editor" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="wide panel-heading"><div><h2>Edit article</h2><p class="muted">Save changes first, then use the publishing controls above.</p></div></div>
+  <label class="wide">Title<input name="title" value="{{ post.title }}" required></label>
+  <label class="wide">Excerpt<textarea name="excerpt" rows="3" required>{{ post.excerpt }}</textarea></label>
+  <label>Meta title<input name="meta_title" maxlength="60" value="{{ post.meta_title }}"></label>
+  <label>Focus keyword<input name="focus_keyword" value="{{ post.focus_keyword or '' }}"></label>
+  <label class="wide">Meta description<textarea name="meta_description" rows="3" maxlength="160">{{ post.meta_description }}</textarea></label>
+  <label>Category<input name="category" value="{{ post.category }}"></label>
+  <label class="checkbox"><input type="checkbox" name="regenerate_slug" value="1"> Regenerate URL slug from the title</label>
+  <label class="wide">Article HTML<textarea class="code-editor" name="content_html" rows="28" required>{{ post.content_html }}</textarea></label>
+  <button class="button" type="submit">Save Changes</button>
+</form>
+{% endblock %}
