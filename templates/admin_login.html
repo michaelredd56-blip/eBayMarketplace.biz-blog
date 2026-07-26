@@ -1,3 +1,42 @@
 {% extends "base.html" %}
 {% block title %}Admin Sign In | {{ site_name }}{% endblock %}
-{% block content %}<section class="login-page"><form class="login-card" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="next" value="{{ next_url or '' }}"><span class="eyebrow">Secure administration</span><h1>Sign in</h1><label>Username<input name="username" autocomplete="username" required></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button class="button full" type="submit">Open control center</button></form></section>{% endblock %}
+{% block meta_description %}Secure administrator sign-in for {{ site_name }}.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='admin-login.css') }}">{% endblock %}
+{% block content %}
+<section class="login-page admin-login-page">
+  <div class="admin-login-shell">
+    <div class="admin-login-intro">
+      <span class="eyebrow">Private administration</span>
+      <h1>Manage the product blog</h1>
+      <p>Sign in to import products, generate and publish articles, review the sitemap, and run SEO checks.</p>
+      <div class="admin-login-features" aria-label="Admin features">
+        <span>Product imports</span>
+        <span>Automatic publishing</span>
+        <span>Post management</span>
+        <span>SEO repairs</span>
+      </div>
+      <a class="admin-back-link" href="{{ url_for('index') }}">← Return to the public blog</a>
+    </div>
+
+    <form class="login-card admin-login-card" method="post" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next_url or '' }}">
+      <span class="eyebrow">Administrator access</span>
+      <h2>Sign in</h2>
+      <p class="login-help">Use the administrator password saved as <strong>ADMIN_PASSWORD</strong> in Render.</p>
+
+      <label for="admin-username">Username</label>
+      <input id="admin-username" name="username" value="admin" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+
+      <label for="admin-password">Password</label>
+      <div class="password-field">
+        <input id="admin-password" type="password" name="password" autocomplete="current-password" required autofocus>
+        <button class="password-toggle" type="button" data-password-toggle aria-controls="admin-password" aria-pressed="false">Show</button>
+      </div>
+
+      <button class="button full admin-login-button" type="submit">Open control center</button>
+      <p class="login-security-note">Your password is checked securely on the server and is not displayed on the website.</p>
+    </form>
+  </div>
+</section>
+{% endblock %}
