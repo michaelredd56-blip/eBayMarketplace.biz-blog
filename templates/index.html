@@ -1,23 +1,37 @@
 {% extends "base.html" %}
 {% block title %}{{ site_name }} | Independent Product Guides{% endblock %}
 {% block content %}
-<section class="hero">
-  <div class="container hero-grid">
-    <div>
-      <span class="eyebrow">Independent shopping research</span>
+<section class="hero visual-hero{% if featured_products and featured_products[0].image_url %} has-hero-image{% endif %}"{% if featured_products and featured_products[0].image_url %} style="--hero-image: url('{{ featured_products[0].image_url }}')"{% endif %}>
+  <div class="visual-hero-shade" aria-hidden="true"></div>
+  <div class="container hero-grid visual-hero-grid">
+    <div class="hero-copy-panel">
+      <span class="eyebrow light-eyebrow">Independent shopping research</span>
       <h1>Find useful products without digging through endless listings.</h1>
-      <p>Clear product overviews, buying questions, and curated links to help you compare options with more confidence.</p>
-      <form class="search-form" action="{{ url_for('search') }}" method="get">
+      <p>Clear product overviews, buying questions, and curated links that make it easier to compare products and shop with confidence.</p>
+      <form class="search-form visual-search" action="{{ url_for('search') }}" method="get">
         <label class="sr-only" for="home-search">Search product guides</label>
         <input id="home-search" name="q" placeholder="Search guides and products">
-        <button type="submit">Search</button>
+        <button type="submit">Search guides</button>
       </form>
+      <div class="hero-actions">
+        <a class="button hero-primary" href="#latest-guides">Browse latest guides</a>
+        <a class="hero-text-link" href="{{ source_site_url }}" rel="noopener">Shop eBayMarketplace.biz →</a>
+      </div>
+      <div class="hero-proof" aria-label="What readers can expect">
+        <span><strong>Visual</strong> product guides</span>
+        <span><strong>Clear</strong> buying questions</span>
+        <span><strong>Direct</strong> product links</span>
+      </div>
     </div>
-    <div class="hero-visual">
+    <div class="hero-visual visual-product-collage" aria-label="Featured marketplace products">
       {% for product in featured_products[:4] %}
-        <a class="mini-product" href="{{ product.source_url }}">
-          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% endif %}
+        <a class="mini-product visual-mini-product" href="{{ product.source_url }}" rel="noopener">
+          <div class="mini-product-image">
+            {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% else %}<span>{{ product.category }}</span>{% endif %}
+          </div>
+          <small>{{ product.category }}</small>
           <span>{{ product.title }}</span>
+          {% if product.price %}<strong>{{ product.price|money(product.currency) }}</strong>{% endif %}
         </a>
       {% else %}
         <div class="hero-placeholder"><span>Smart finds</span><span>Buying guides</span><span>Curated deals</span></div>
@@ -26,42 +40,54 @@
   </div>
 </section>
 
+<section class="visual-value-band" aria-label="Blog features">
+  <div class="container visual-value-grid">
+    <div><span class="value-icon">01</span><strong>See the product</strong><p>Every guide puts the selected product image front and center.</p></div>
+    <div><span class="value-icon">02</span><strong>Understand the details</strong><p>Review practical features, use cases, limitations, and buying questions.</p></div>
+    <div><span class="value-icon">03</span><strong>Visit the listing</strong><p>Use clear product-name links to reach the current marketplace listing.</p></div>
+  </div>
+</section>
+
 {% if categories %}
-<section class="container category-strip" aria-label="Popular categories">
-  {% for name, count in categories %}<a href="{{ url_for('category', category=name|lower|replace(' ', '-')) }}">{{ name }} <small>{{ count }}</small></a>{% endfor %}
+<section class="container category-strip visual-category-strip" aria-label="Popular categories">
+  {% for name, count in categories %}<a href="{{ url_for('category', category=name|lower|replace(' ', '-')) }}"><span>{{ name }}</span><small>{{ count }} guides</small></a>{% endfor %}
 </section>
 {% endif %}
 
-<section class="container section-block">
-  <div class="section-heading"><div><span class="eyebrow">Latest articles</span><h2>Fresh product guides</h2></div></div>
-  <div class="card-grid">
-    {% for post in posts.items %}
-      <article class="post-card">
-        <a class="card-image" href="{{ url_for('article', slug=post.slug) }}">
-          {% if post.product and post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% else %}<span>{{ post.category }}</span>{% endif %}
-        </a>
-        <div class="card-body">
-          <span class="card-category">{{ post.category }}</span>
-          <h3><a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a></h3>
-          <p>{{ post.excerpt }}</p>
-          <div class="card-meta"><span>{{ post.published_at|datefmt }}</span><a href="{{ url_for('article', slug=post.slug) }}">Read guide →</a></div>
-        </div>
-      </article>
-    {% else %}
-      <div class="empty-state"><h3>The blog is ready.</h3><p>Sign in to the admin panel, import products, and generate the first article.</p></div>
-    {% endfor %}
+<section id="latest-guides" class="article-feed-section">
+  <div class="container section-block">
+    <div class="section-heading visual-section-heading"><div><span class="eyebrow">Latest articles</span><h2>Fresh product guides</h2><p>Browse recently published buying guides with product photos, practical comparisons, and direct marketplace links.</p></div></div>
+    <div class="card-grid visual-card-grid">
+      {% for post in posts.items %}
+        <article class="post-card visual-post-card">
+          <a class="card-image visual-card-image" href="{{ url_for('article', slug=post.slug) }}">
+            {% if post.product and post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% else %}<span>{{ post.category }}</span>{% endif %}
+            <span class="image-read-badge">Read guide</span>
+          </a>
+          <div class="card-body">
+            <span class="card-category">{{ post.category }}</span>
+            <h3><a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a></h3>
+            <p>{{ post.excerpt }}</p>
+            <div class="card-meta"><span>{{ post.published_at|datefmt }}</span><a href="{{ url_for('article', slug=post.slug) }}">Read full guide →</a></div>
+          </div>
+        </article>
+      {% else %}
+        <div class="empty-state"><h3>The blog is ready.</h3><p>Sign in to the admin panel, import products, and generate the first article.</p></div>
+      {% endfor %}
+    </div>
+    {% include "pagination.html" %}
   </div>
-  {% include "pagination.html" %}
 </section>
 
 {% if featured_products %}
-<section class="marketplace-band">
+<section class="marketplace-band visual-marketplace-band">
+  <div class="marketplace-glow" aria-hidden="true"></div>
   <div class="container">
-    <div class="section-heading light"><div><span class="eyebrow">From eBayMarketplace.biz</span><h2>Recently curated products</h2></div><a class="button secondary" href="{{ source_site_url }}">Browse marketplace</a></div>
-    <div class="product-grid">
+    <div class="section-heading light"><div><span class="eyebrow">From eBayMarketplace.biz</span><h2>Recently curated products</h2><p class="marketplace-intro">Explore more products that may inspire the next buying guide.</p></div><a class="button secondary" href="{{ source_site_url }}">Browse marketplace</a></div>
+    <div class="product-grid visual-product-grid">
       {% for product in featured_products %}
-        <a class="product-tile" href="{{ product.source_url }}">
-          {% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% endif %}
+        <a class="product-tile visual-product-tile" href="{{ product.source_url }}" rel="noopener">
+          <div class="product-tile-image">{% if product.image_url %}<img src="{{ product.image_url }}" alt="{{ product.title }}" loading="lazy">{% else %}<span>{{ product.category }}</span>{% endif %}</div>
           <span>{{ product.category }}</span><strong>{{ product.title }}</strong>
           {% if product.price %}<em>{{ product.price|money(product.currency) }}</em>{% endif %}
         </a>
