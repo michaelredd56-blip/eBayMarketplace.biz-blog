@@ -1,0 +1,20 @@
+.admin-login-page{min-height:calc(100vh - 78px);padding:56px 20px;background:radial-gradient(circle at 15% 20%,rgba(41,112,255,.18),transparent 32%),radial-gradient(circle at 90% 75%,rgba(127,86,217,.15),transparent 30%),linear-gradient(135deg,#f7f9ff,#fff 52%,#f8f5ff)}
+.admin-login-shell{width:min(980px,100%);display:grid;grid-template-columns:1.05fr .95fr;gap:46px;align-items:center}
+.admin-login-intro{padding:24px 8px}
+.admin-login-intro h1{font-size:clamp(2.4rem,5vw,4.2rem);line-height:1.02;letter-spacing:-.055em;margin:.15em 0 .35em}
+.admin-login-intro>p{max-width:570px;color:#475467;font-size:1.08rem}
+.admin-login-features{display:flex;flex-wrap:wrap;gap:10px;margin:28px 0}
+.admin-login-features span{border:1px solid #d0d5dd;background:rgba(255,255,255,.78);border-radius:999px;padding:8px 12px;font-size:.82rem;font-weight:750;color:#344054}
+.admin-back-link{display:inline-flex;margin-top:12px;color:#175cd3;font-weight:750}
+.admin-login-card{width:100%;padding:36px;border-radius:24px}
+.admin-login-card h2{font-size:2rem;letter-spacing:-.035em;margin:.1em 0 .35em}
+.login-help{color:#667085;font-size:.92rem;margin:0 0 24px}
+.admin-login-card>label{margin:16px 0 7px}
+.admin-login-card>input,.password-field input{min-height:48px}
+.password-field{position:relative}
+.password-field input{padding-right:72px}
+.password-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:#eef4ff;color:#1849a9;border-radius:8px;padding:7px 10px;font-weight:800;cursor:pointer}
+.password-toggle:hover{background:#dbe8ff}
+.admin-login-button{margin-top:22px;min-height:48px}
+.login-security-note{font-size:.78rem;color:#667085;text-align:center;margin:14px 0 0}
+@media(max-width:760px){.admin-login-shell{grid-template-columns:1fr;gap:20px}.admin-login-intro{padding:4px}.admin-login-intro h1{font-size:2.5rem}.admin-login-card{padding:28px 22px}}
