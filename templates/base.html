@@ -22,7 +22,7 @@
       <a href="{{ url_for('index') }}">Home</a>
       <a href="{{ url_for('about') }}">About</a>
       <a href="{{ source_site_url }}" rel="noopener">Shop Marketplace</a>
-      {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin</a>{% endif %}
+      {% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>{% else %}<a href="{{ url_for('admin_login') }}">Admin Sign In</a>{% endif %}
     </nav>
   </div>
 </header>
@@ -41,7 +41,7 @@
   <div class="container footer-grid">
     <div><strong>{{ site_name }}</strong><p>{{ site_tagline }}.</p></div>
     <div><strong>Information</strong><a href="{{ url_for('about') }}">About</a><a href="{{ url_for('privacy') }}">Privacy</a><a href="{{ url_for('affiliate_disclosure') }}">Affiliate Disclosure</a></div>
-    <div><strong>Explore</strong><a href="{{ source_site_url }}">eBayMarketplace.biz</a><a href="{{ url_for('feed') }}">RSS Feed</a><a href="{{ url_for('sitemap') }}">Sitemap</a></div>
+    <div><strong>Explore</strong><a href="{{ source_site_url }}">eBayMarketplace.biz</a><a href="{{ url_for('feed') }}">RSS Feed</a><a href="{{ url_for('sitemap') }}">Sitemap</a>{% if is_admin %}<a href="{{ url_for('admin_dashboard') }}">Admin Dashboard</a>{% else %}<a href="{{ url_for('admin_login') }}">Admin Sign In</a>{% endif %}</div>
   </div>
   <div class="container footer-bottom">© {{ current_year }} {{ site_name }}. Product availability and pricing may change.</div>
 </footer>
