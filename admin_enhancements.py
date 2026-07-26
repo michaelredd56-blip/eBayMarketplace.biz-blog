@@ -5,9 +5,10 @@ import re
 from flask import abort, flash, redirect, render_template, request, url_for
 from sqlalchemy import desc
 
+from content_enhancements import ensure_post_product_image, valid_image_url
 from models import Post, SEOIssue, db
 from seo_repairs import apply_seo_fixes, run_seo_audit
-from services import publish_post
+from services import publish_post, update_post
 
 
 def _post_id_from_issue(issue: SEOIssue) -> int | None:
@@ -20,7 +21,6 @@ def install_admin_enhancements(app) -> None:
     from app import _safe_next_url, admin_required
 
     def enhanced_admin_seo():
-        # Keep the page accurate even when old database rows were created by an earlier audit version.
         run_seo_audit()
         issues = (
             SEOIssue.query.filter_by(status="open")
@@ -76,11 +76,67 @@ def install_admin_enhancements(app) -> None:
             flash("There are currently no safe automatic fixes to apply.", "warning")
         return redirect(url_for("admin_seo"))
 
+    def enhanced_admin_post_edit(post_id: int):
+        post = db.session.get(Post, post_id) or abort(404)
+        return_to = _safe_next_url(request.args.get("next") or request.form.get("next"))
+        return_to = return_to or url_for("admin_posts")
+
+        if request.method == "POST":
+            image_url = request.form.get("product_image_url", "").strip()
+            if image_url and not valid_image_url(image_url):
+                flash("The product image URL must begin with http:// or https://.", "danger")
+                return render_template("admin_post_edit.html", post=post, return_to=return_to), 400
+
+            try:
+                update_post(post, request.form)
+                if post.product:
+                    post.product.image_url = image_url or None
+                    if not post.product.image_url:
+                        ensure_post_product_image(post)
+                    db.session.commit()
+
+                if request.form.get("action") == "publish":
+                    image_added = ensure_post_product_image(post)
+                    publish_post(post)
+                    run_seo_audit()
+                    flash(f'Published “{post.title}” live on the website.', "success")
+                    if not post.product or not post.product.image_url:
+                        flash(
+                            "The article is live, but no verified product image was available. "
+                            "Add the correct image URL from the product source when available.",
+                            "warning",
+                        )
+                    elif image_added:
+                        flash("A verified product image was added before publication.", "success")
+                    return redirect(return_to)
+
+                flash("Article changes saved.", "success")
+                return redirect(url_for("admin_post_edit", post_id=post.id, next=return_to))
+            except Exception as exc:
+                db.session.rollback()
+                app.logger.exception("Could not save reviewed article")
+                flash(f"Could not save the article: {exc}", "danger")
+
+        if ensure_post_product_image(post):
+            db.session.commit()
+        return render_template("admin_post_edit.html", post=post, return_to=return_to)
+
     def enhanced_admin_post_publish(post_id: int):
         post = db.session.get(Post, post_id) or abort(404)
+        was_published = post.status == "published"
+        image_added = ensure_post_product_image(post)
         publish_post(post)
         run_seo_audit()
-        flash(f'Published “{post.title}”.', "success")
+        action = "Republished" if was_published else "Published"
+        flash(f'{action} “{post.title}” live on the website.', "success")
+        if not post.product or not post.product.image_url:
+            flash(
+                "No verified product image was available for this article. "
+                "Use Review Content to add the correct product image URL.",
+                "warning",
+            )
+        elif image_added:
+            flash("A verified product image was added before publication.", "success")
         return redirect(_safe_next_url(request.form.get("next")) or url_for("admin_posts"))
 
     def enhanced_admin_post_unpublish(post_id: int):
@@ -94,6 +150,7 @@ def install_admin_enhancements(app) -> None:
     app.view_functions["admin_seo"] = admin_required(enhanced_admin_seo)
     app.view_functions["admin_seo_audit"] = admin_required(enhanced_admin_seo_audit)
     app.view_functions["admin_seo_fix"] = admin_required(enhanced_admin_seo_fix)
+    app.view_functions["admin_post_edit"] = admin_required(enhanced_admin_post_edit)
     app.view_functions["admin_post_publish"] = admin_required(enhanced_admin_post_publish)
     app.view_functions["admin_post_unpublish"] = admin_required(enhanced_admin_post_unpublish)
 
