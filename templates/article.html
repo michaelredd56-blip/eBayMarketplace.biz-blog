@@ -11,27 +11,33 @@
 <script type="application/ld+json">{{ article_schema|tojson }}</script>
 {% endblock %}
 {% block content %}
-<article class="article-shell">
-  <header class="article-hero">
-    <div class="container narrow">
-      <a class="card-category" href="{{ url_for('category', category=post.category|lower|replace(' ', '-')) }}">{{ post.category }}</a>
+<article class="article-shell visual-article-shell">
+  <header class="article-hero visual-article-hero{% if post.product and post.product.image_url %} has-article-image{% endif %}"{% if post.product and post.product.image_url %} style="--article-image: url('{{ post.product.image_url }}')"{% endif %}>
+    <div class="article-hero-overlay" aria-hidden="true"></div>
+    <div class="container narrow article-title-panel">
+      <a class="card-category article-category-pill" href="{{ url_for('category', category=post.category|lower|replace(' ', '-')) }}">{{ post.category }}</a>
       <h1>{{ post.title }}</h1>
       <p class="article-deck">{{ post.excerpt }}</p>
       <div class="article-meta">Published {{ post.published_at|datefmt }} · Updated {{ post.updated_at|datefmt }}</div>
     </div>
   </header>
   {% if post.product and post.product.image_url %}
-  <div class="container article-image-wrap"><img class="article-image" src="{{ post.product.image_url }}" alt="{{ post.product.title }}"></div>
+  <div class="container article-image-wrap visual-article-image-wrap">
+    <div class="article-image-frame">
+      <span class="featured-image-label">Featured product</span>
+      <img class="article-image" src="{{ post.product.image_url }}" alt="{{ post.product.title }}">
+    </div>
+  </div>
   {% endif %}
-  <div class="container article-layout">
-    <div class="article-content">{{ post.content_html|safe }}</div>
+  <div class="container article-layout visual-article-layout">
+    <div class="article-content visual-article-content">{{ post.content_html|safe }}</div>
     {% if post.product %}
-    <aside class="product-cta">
+    <aside class="product-cta visual-product-cta">
       <span>Featured product</span>
-      {% if post.product.image_url %}<img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy">{% endif %}
+      {% if post.product.image_url %}<div class="cta-product-image"><img src="{{ post.product.image_url }}" alt="{{ post.product.title }}" loading="lazy"></div>{% endif %}
       <h2>{{ post.product.title }}</h2>
       {% if post.product.price %}<strong>{{ post.product.price|money(post.product.currency) }}</strong>{% endif %}
-      <a class="button" href="{{ post.product.affiliate_url }}" target="_blank" rel="sponsored noopener nofollow">{{ post.product.title }}</a>
+      <a class="button" href="{{ post.product.affiliate_url }}" target="_blank" rel="sponsored noopener nofollow">View {{ post.product.title }}</a>
       <a class="text-link" href="{{ post.product.source_url }}" rel="noopener">See curated marketplace page</a>
       <small>Price, condition, and availability are controlled by the seller and may change.</small>
     </aside>
@@ -39,6 +45,21 @@
   </div>
 </article>
 {% if related %}
-<section class="container section-block"><div class="section-heading"><h2>Related guides</h2></div><div class="card-grid compact">{% for item in related %}<article class="post-card"><div class="card-body"><span class="card-category">{{ item.category }}</span><h3><a href="{{ url_for('article', slug=item.slug) }}">{{ item.title }}</a></h3><p>{{ item.excerpt }}</p></div></article>{% endfor %}</div></section>
+<section class="related-guides-section">
+  <div class="container section-block">
+    <div class="section-heading visual-section-heading"><div><span class="eyebrow">Keep browsing</span><h2>Related guides</h2><p>Explore more visual product guides and buying considerations.</p></div></div>
+    <div class="card-grid compact visual-card-grid">
+      {% for item in related %}
+      <article class="post-card visual-post-card">
+        <a class="card-image visual-card-image" href="{{ url_for('article', slug=item.slug) }}">
+          {% if item.product and item.product.image_url %}<img src="{{ item.product.image_url }}" alt="{{ item.product.title }}" loading="lazy">{% else %}<span>{{ item.category }}</span>{% endif %}
+          <span class="image-read-badge">Read guide</span>
+        </a>
+        <div class="card-body"><span class="card-category">{{ item.category }}</span><h3><a href="{{ url_for('article', slug=item.slug) }}">{{ item.title }}</a></h3><p>{{ item.excerpt }}</p><div class="card-meta"><span>Product guide</span><a href="{{ url_for('article', slug=item.slug) }}">Read more →</a></div></div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+</section>
 {% endif %}
 {% endblock %}
