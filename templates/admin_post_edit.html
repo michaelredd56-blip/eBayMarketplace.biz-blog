@@ -2,18 +2,17 @@
 {% block title %}Review Article | {{ site_name }}{% endblock %}
 {% block head %}<link rel="stylesheet" href="{{ url_for('static', filename='admin-review.css') }}">{% endblock %}
 {% block admin_content %}
-{% set return_to = request.args.get('next') or url_for('admin_posts') %}
+{% set return_to = return_to or request.args.get('next') or url_for('admin_posts') %}
 <div class="admin-heading review-heading">
-  <div><span class="eyebrow">{{ post.status }} content</span><h1>Review article</h1><p class="muted">Preview the article, edit any field, then publish it, move it to drafts, or delete it.</p></div>
+  <div><span class="eyebrow">{{ post.status }} content</span><h1>Review article</h1><p class="muted">Preview the article, edit any field, then publish the reviewed version live immediately.</p></div>
   <div class="row-actions review-toolbar">
     <a class="button secondary" href="{{ return_to }}">Back</a>
-    {% if post.status == 'draft' %}
     <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ return_to }}">
-      <button class="button" type="submit">Publish Article</button>
+      <button class="button" type="submit">{{ 'Publish Live Now' if post.status == 'draft' else 'Republish Live Now' }}</button>
     </form>
-    {% else %}
+    {% if post.status == 'published' %}
     <a class="button secondary" href="{{ url_for('article', slug=post.slug) }}" target="_blank" rel="noopener">View Live</a>
     <form method="post" action="{{ url_for('admin_post_unpublish', post_id=post.id) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -21,7 +20,7 @@
       <button class="button secondary" type="submit">Move to Draft</button>
     </form>
     {% endif %}
-    <form method="post" action="/admin/posts/{{ post.id }}/delete" data-confirm="Delete this article permanently? This cannot be undone.">
+    <form method="post" action="{{ url_for('admin_post_delete', post_id=post.id) }}" data-confirm="Delete this article permanently? This cannot be undone.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ return_to }}">
       <button class="button danger" type="submit">Delete Article</button>
@@ -30,13 +29,13 @@
 </div>
 
 <section class="panel article-review-panel">
-  <div class="panel-heading"><div><h2>Article preview</h2><p class="muted">This is how the article content reads before or after publication.</p></div><span class="status status-{{ post.status }}">{{ post.status }}</span></div>
+  <div class="panel-heading"><div><h2>Article preview</h2><p class="muted">This preview includes the verified product image that will appear on the public article.</p></div><span class="status status-{{ post.status }}">{{ post.status }}</span></div>
   <article class="admin-article-preview">
     <header>
       <span class="card-category">{{ post.category }}</span>
       <h1>{{ post.title }}</h1>
       <p class="article-deck">{{ post.excerpt }}</p>
-      {% if post.product and post.product.image_url %}<img class="review-product-image" src="{{ post.product.image_url }}" alt="{{ post.product.title }}">{% endif %}
+      {% if post.product and post.product.image_url %}<img class="review-product-image" src="{{ post.product.image_url }}" alt="{{ post.product.title }}">{% else %}<p class="notice">No verified product image is saved yet. Add the correct image URL below before publishing.</p>{% endif %}
     </header>
     <div class="article-content">{{ post.content_html|safe }}</div>
   </article>
@@ -44,7 +43,8 @@
 
 <form class="panel form-grid review-editor" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <div class="wide panel-heading"><div><h2>Edit article</h2><p class="muted">Save changes first, then use the publishing controls above.</p></div></div>
+  <input type="hidden" name="next" value="{{ return_to }}">
+  <div class="wide panel-heading"><div><h2>Edit article</h2><p class="muted">Use Save Changes to keep reviewing, or Save & Publish Live Now to make this exact reviewed version public immediately.</p></div></div>
   <label class="wide">Title<input name="title" value="{{ post.title }}" required></label>
   <label class="wide">Excerpt<textarea name="excerpt" rows="3" required>{{ post.excerpt }}</textarea></label>
   <label>Meta title<input name="meta_title" maxlength="60" value="{{ post.meta_title }}"></label>
@@ -52,7 +52,11 @@
   <label class="wide">Meta description<textarea name="meta_description" rows="3" maxlength="160">{{ post.meta_description }}</textarea></label>
   <label>Category<input name="category" value="{{ post.category }}"></label>
   <label class="checkbox"><input type="checkbox" name="regenerate_slug" value="1"> Regenerate URL slug from the title</label>
+  {% if post.product %}<label class="wide">Verified product image URL<input type="url" name="product_image_url" value="{{ post.product.image_url or '' }}" placeholder="https://example.com/product-image.jpg"><small class="muted">The article displays this image at the top and in the featured-product section. Leave it blank to retry the verified source page automatically.</small></label>{% endif %}
   <label class="wide">Article HTML<textarea class="code-editor" name="content_html" rows="28" required>{{ post.content_html }}</textarea></label>
-  <button class="button" type="submit">Save Changes</button>
+  <div class="wide row-actions">
+    <button class="button secondary" type="submit" name="action" value="save">Save Changes</button>
+    <button class="button" type="submit" name="action" value="publish">Save & Publish Live Now</button>
+  </div>
 </form>
 {% endblock %}
