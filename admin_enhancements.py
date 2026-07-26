@@ -20,6 +20,8 @@ def install_admin_enhancements(app) -> None:
     from app import _safe_next_url, admin_required
 
     def enhanced_admin_seo():
+        # Keep the page accurate even when old database rows were created by an earlier audit version.
+        run_seo_audit()
         issues = (
             SEOIssue.query.filter_by(status="open")
             .order_by(SEOIssue.severity, desc(SEOIssue.detected_at))
@@ -60,9 +62,7 @@ def install_admin_enhancements(app) -> None:
         report = apply_seo_fixes()
         if report["applied"]:
             category = "success" if not report["unresolved"] else "warning"
-            message = (
-                f"Applied {report['applied']} of {report['attempted']} safe SEO fixes."
-            )
+            message = f"Applied {report['applied']} of {report['attempted']} safe SEO fixes."
             if report["unresolved"]:
                 message += " Remaining findings were left open for review."
             flash(message, category)
