@@ -5,7 +5,7 @@
 {% set fixable_issues = issues|selectattr('auto_fixable')|list %}
 {% set review_issues = issues|rejectattr('auto_fixable')|list %}
 <div class="admin-heading">
-  <div><span class="eyebrow">Technical quality</span><h1>SEO audit and repairs</h1></div>
+  <div><span class="eyebrow">Technical quality</span><h1>SEO audit and content review</h1></div>
   <div class="row-actions">
     <form method="post" action="{{ url_for('admin_seo_audit') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -16,7 +16,7 @@
       {% if fixable_issues %}
       <button class="button" type="submit">Apply {{ fixable_issues|length }} safe {{ 'fix' if fixable_issues|length == 1 else 'fixes' }}</button>
       {% else %}
-      <button class="button" type="button" disabled title="The current findings require review rather than an automatic change.">No safe fixes available</button>
+      <button class="button" type="button" disabled>No safe fixes available</button>
       {% endif %}
     </form>
   </div>
@@ -25,27 +25,78 @@
 <section class="seo-summary" aria-label="SEO issue summary">
   <div><span>Open findings</span><strong>{{ issues|length }}</strong></div>
   <div><span>Safe automatic fixes</span><strong>{{ fixable_issues|length }}</strong></div>
-  <div><span>Needs review</span><strong>{{ review_issues|length }}</strong></div>
+  <div><span>Needs content review</span><strong>{{ review_issues|length }}</strong></div>
 </section>
 
 <section class="panel">
-  <p class="notice">The repair button now performs a fresh audit first and only counts changes that pass the follow-up audit. It can safely repair metadata length, duplicate meta titles, required product links, exact affiliate anchor text, contextual marketplace links, and product images that can be recovered from the source page.</p>
-  {% if issues and not fixable_issues %}
-  <p class="seo-review-note"><strong>The button previously reported zero because every current finding was a review item.</strong> Thin articles and images that cannot be recovered automatically remain listed so you can edit them without the system inventing content or using an unrelated image.</p>
-  {% endif %}
+  <div class="panel-heading"><h2>SEO findings</h2></div>
+  <p class="notice">Safe repairs are limited to deterministic metadata and link changes. Missing images and thin articles are review items because the system will not invent text or attach an unverified image.</p>
   <div class="issue-list">
-    {% for issue in issues %}
-    <article class="issue">
-      <div>
-        <span class="severity severity-{{ issue.severity }}">{{ issue.severity }}</span>
-        <strong>{{ issue.issue_type|replace('-', ' ')|title }}</strong>
+    {% for row in issue_rows %}
+    {% set issue = row.issue %}
+    {% set post = row.post %}
+    <article class="issue seo-issue-card">
+      <div class="seo-issue-copy">
+        <div><span class="severity severity-{{ issue.severity }}">{{ issue.severity }}</span><strong>{{ issue.issue_type|replace('-', ' ')|title }}</strong></div>
         <p>{{ issue.details }}</p>
-        {% if issue.page_url %}<a href="{{ issue.page_url }}" target="_blank" rel="noopener">Open page</a>{% endif %}
+        {% if post %}<small>{{ post.title }} · {{ post.status|title }}</small>{% endif %}
       </div>
-      <span class="status status-{{ 'active' if issue.auto_fixable else 'inactive' }}">{{ 'safe fix' if issue.auto_fixable else 'review' }}</span>
+      <div class="seo-issue-actions">
+        <span class="status status-{{ 'active' if issue.auto_fixable else 'inactive' }}">{{ 'safe fix' if issue.auto_fixable else 'review content' }}</span>
+        {% if post %}
+        <a class="button secondary compact" href="{{ url_for('admin_post_edit', post_id=post.id, next=url_for('admin_seo')) }}">Review Content</a>
+        {% if post.status == 'draft' %}
+        <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
+          <button class="button compact" type="submit">Publish</button>
+        </form>
+        {% else %}
+        <a class="text-button" href="{{ url_for('article', slug=post.slug) }}" target="_blank" rel="noopener">View Live</a>
+        <form method="post" action="{{ url_for('admin_post_unpublish', post_id=post.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
+          <button class="text-button" type="submit">Move to Draft</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin_post_delete', post_id=post.id) }}" data-confirm="Delete this article permanently? This cannot be undone.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
+          <button class="text-button danger-text" type="submit">Delete</button>
+        </form>
+        {% elif issue.page_url %}
+        <a class="text-button" href="{{ issue.page_url }}" target="_blank" rel="noopener">Open Page</a>
+        {% endif %}
+      </div>
     </article>
     {% else %}
-    <div class="empty-state"><h3>No open issues.</h3><p>Run an audit after publishing new content.</p></div>
+    <div class="empty-state"><h3>No open SEO findings.</h3><p>Run an audit after publishing new content.</p></div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-heading"><div><h2>Draft content review queue</h2><p class="muted">Open a draft to review the full article, publish it when ready, or delete it.</p></div><span class="status status-draft">{{ review_queue|length }} drafts</span></div>
+  <div class="review-queue">
+    {% for post in review_queue %}
+    <article class="review-card">
+      <div><span class="card-category">{{ post.category }}</span><h3>{{ post.title }}</h3><p>{{ post.excerpt }}</p><small>Updated {{ post.updated_at|datefmt('%b %d, %Y') }}</small></div>
+      <div class="row-actions review-actions">
+        <a class="button secondary compact" href="{{ url_for('admin_post_edit', post_id=post.id, next=url_for('admin_seo')) }}">Review Content</a>
+        <form method="post" action="{{ url_for('admin_post_publish', post_id=post.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
+          <button class="button compact" type="submit">Publish</button>
+        </form>
+        <form method="post" action="{{ url_for('admin_post_delete', post_id=post.id) }}" data-confirm="Delete this draft permanently? This cannot be undone.">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="next" value="{{ url_for('admin_seo') }}">
+          <button class="button danger compact" type="submit">Delete</button>
+        </form>
+      </div>
+    </article>
+    {% else %}
+    <div class="empty-state"><h3>No drafts waiting for review.</h3><p>New draft articles will appear here automatically.</p></div>
     {% endfor %}
   </div>
 </section>
