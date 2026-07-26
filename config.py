@@ -31,7 +31,7 @@ class Config:
 
     SITE_NAME = os.getenv("SITE_NAME", "Marketplace Finds")
     SITE_TAGLINE = os.getenv("SITE_TAGLINE", "Useful product guides and smart shopping ideas")
-    SITE_URL = os.getenv("SITE_URL", "http://localhost:5000").rstrip("/")
+    SITE_URL = (os.getenv("SITE_URL") or os.getenv("RENDER_EXTERNAL_URL") or "http://localhost:5000").rstrip("/")
     SOURCE_SITE_URL = os.getenv("SOURCE_SITE_URL", "https://ebaymarketplace.biz").rstrip("/")
     SOURCE_SITEMAP_URL = os.getenv("SOURCE_SITEMAP_URL", "").strip()
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
@@ -40,11 +40,6 @@ class Config:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
     OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
-    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
-    GOOGLE_SEARCH_CONSOLE_PROPERTY = os.getenv("GOOGLE_SEARCH_CONSOLE_PROPERTY", "")
-    TOKEN_ENCRYPTION_KEY = os.getenv("TOKEN_ENCRYPTION_KEY", "")
 
     AUTO_PUBLISH = _bool("AUTO_PUBLISH", False)
     SCHEDULER_ENABLED = _bool("SCHEDULER_ENABLED", False)

@@ -1,3 +1,5 @@
+from bs4 import BeautifulSoup
+
 from config import TestConfig
 from app import create_app
 from models import Product, db
@@ -23,12 +25,13 @@ def login(client):
     )
 
 
-def test_public_home_and_health():
+def test_public_home_health_and_no_search_console_route():
     app = make_app()
     with app.test_client() as client:
         assert client.get("/").status_code == 200
         assert client.get("/healthz").status_code == 200
         assert b"Marketplace Finds" in client.get("/").data
+        assert client.get("/admin/gsc").status_code == 404
 
 
 def test_admin_login_and_manual_product():
@@ -53,7 +56,7 @@ def test_admin_login_and_manual_product():
             assert Product.query.count() == 1
 
 
-def test_fallback_generation_publish_sitemap_and_audit():
+def test_self_published_article_anchor_schema_sitemap_and_audit():
     app = make_app()
     with app.app_context():
         product = Product(
@@ -69,13 +72,22 @@ def test_fallback_generation_publish_sitemap_and_audit():
         db.session.commit()
         post = generate_post(product.id, publish=True)
         assert post.status == "published"
-        assert "sponsored" in post.content_html
+        soup = BeautifulSoup(post.content_html, "html.parser")
+        affiliate = soup.select_one(f'a[href="{product.affiliate_url}"]')
+        assert affiliate is not None
+        assert affiliate.get_text(" ", strip=True) == product.title
+        assert "sponsored" in affiliate.get("rel", [])
         result = run_seo_audit()
         assert result["published_posts"] == 1
         post_slug = post.slug
 
     with app.test_client() as client:
-        assert client.get(f"/blog/{post_slug}").status_code == 200
+        article = client.get(f"/blog/{post_slug}")
+        assert article.status_code == 200
+        assert b'"@type": "Product"' in article.data
+        assert b"Example Product" in article.data
         sitemap = client.get("/sitemap.xml")
         assert sitemap.status_code == 200
+        assert sitemap.content_type.startswith("application/xml")
         assert post_slug.encode() in sitemap.data
+        assert b"<lastmod>" in sitemap.data

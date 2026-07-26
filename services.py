@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import random
@@ -14,14 +13,13 @@ from urllib.parse import urljoin, urlparse
 import bleach
 import requests
 from bs4 import BeautifulSoup
-from cryptography.fernet import Fernet
 from flask import current_app
 from openai import OpenAI
 from slugify import slugify
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
-from models import AutomationRun, OAuthToken, Post, Product, SEOIssue, SiteSetting, db, utcnow
+from models import AutomationRun, Post, Product, SEOIssue, db, utcnow
 
 
 USER_AGENT = "MarketplaceFindsBot/1.0 (+https://ebaymarketplace.biz)"
@@ -68,56 +66,6 @@ def unique_slug(model, text: str, current_id: int | None = None) -> str:
         candidate = f"{base}-{counter}"
         counter += 1
 
-
-def setting_get(key: str, default: str = "") -> str:
-    record = SiteSetting.query.filter_by(key=key).first()
-    return record.value if record and record.value is not None else default
-
-
-def setting_set(key: str, value: str) -> None:
-    record = SiteSetting.query.filter_by(key=key).first()
-    if not record:
-        record = SiteSetting(key=key, value=value)
-        db.session.add(record)
-    else:
-        record.value = value
-    db.session.commit()
-
-
-def _fernet() -> Fernet:
-    configured = current_app.config.get("TOKEN_ENCRYPTION_KEY", "").strip()
-    if configured:
-        key = configured.encode()
-    else:
-        digest = hashlib.sha256(current_app.config["SECRET_KEY"].encode()).digest()
-        key = base64.urlsafe_b64encode(digest)
-    return Fernet(key)
-
-
-def save_oauth_token(provider: str, payload: dict) -> None:
-    encrypted = _fernet().encrypt(json.dumps(payload).encode()).decode()
-    record = OAuthToken.query.filter_by(provider=provider).first()
-    if record:
-        record.encrypted_payload = encrypted
-    else:
-        db.session.add(OAuthToken(provider=provider, encrypted_payload=encrypted))
-    db.session.commit()
-
-
-def load_oauth_token(provider: str) -> dict | None:
-    record = OAuthToken.query.filter_by(provider=provider).first()
-    if not record:
-        return None
-    try:
-        return json.loads(_fernet().decrypt(record.encrypted_payload.encode()).decode())
-    except Exception:
-        current_app.logger.exception("Unable to decrypt OAuth token")
-        return None
-
-
-def delete_oauth_token(provider: str) -> None:
-    OAuthToken.query.filter_by(provider=provider).delete()
-    db.session.commit()
 
 
 def _parse_xml_locations(xml_text: str) -> tuple[list[str], bool]:
@@ -380,7 +328,7 @@ def _fallback_article(product: Product) -> dict:
 <h2>Who may find it useful</h2>
 <p>This product may appeal to shoppers who want a straightforward option in the {escape(product.category or 'featured')} category. The final decision should be based on the live listing because availability, price, condition, and shipping terms can change.</p>
 <h2>Where to view the product</h2>
-<p>Review the original curated page on <a href="{escape(product.source_url)}" rel="noopener">eBayMarketplace.biz</a>, or <a href="{escape(product.affiliate_url)}" target="_blank" rel="sponsored noopener nofollow">view the current eBay listing</a>.</p>
+<p>Review the original curated page on <a href="{escape(product.source_url)}" rel="noopener">eBayMarketplace.biz</a>, or view <a href="{escape(product.affiliate_url)}" target="_blank" rel="sponsored noopener nofollow">{escape(product.title)}</a>.</p>
 <p>You can also <a href="{escape(source_site)}">{escape(anchor)}</a> on eBayMarketplace.biz.</p>
 <h2>Final buying checklist</h2>
 <ol>
@@ -423,8 +371,8 @@ Marketplace homepage: {source_site}
 Requirements:
 - Include a balanced overview, who it may suit, key features to verify, practical use cases, drawbacks/limitations to consider, comparison questions, and a final checklist.
 - Include one natural editorial backlink to the curated source page.
-- Include one clear call-to-action link to the affiliate product URL with rel="sponsored noopener nofollow" and target="_blank".
-- Include one natural contextual link to the marketplace homepage using varied anchor text, not an exact-match stuffed keyword.
+- Link the exact product title as the visible anchor text to the affiliate product URL. Use rel="sponsored noopener nofollow" and target="_blank".
+- Include one natural contextual link to the marketplace homepage.
 - Include an affiliate disclosure at the end.
 - Avoid medical, financial, safety, or performance guarantees.
 - Return only JSON with: title, excerpt, content_html, meta_title, meta_description, focus_keyword, category.
@@ -462,17 +410,49 @@ def sanitize_article_html(html: str) -> str:
 
 
 def ensure_required_links(content_html: str, product: Product) -> str:
+    """Guarantee visible, compliant product-name affiliate linking on every article."""
     soup = BeautifulSoup(content_html, "html.parser")
+    affiliate_anchor = None
+    for anchor in soup.select("a[href]"):
+        if anchor.get("href", "") == product.affiliate_url:
+            affiliate_anchor = anchor
+            break
+
+    if affiliate_anchor is None:
+        paragraph = soup.new_tag("p")
+        paragraph.append("View the current listing for ")
+        affiliate_anchor = soup.new_tag("a", href=product.affiliate_url)
+        paragraph.append(affiliate_anchor)
+        paragraph.append(".")
+        soup.append(paragraph)
+
+    affiliate_anchor.clear()
+    affiliate_anchor.append(product.title)
+    affiliate_anchor["target"] = "_blank"
+    affiliate_anchor["rel"] = "sponsored noopener nofollow"
+
     hrefs = [a.get("href", "") for a in soup.select("a[href]")]
-    additions = []
     if product.source_url not in hrefs:
-        additions.append(f'<p>See the curated product page on <a href="{escape(product.source_url)}">eBayMarketplace.biz</a>.</p>')
-    if product.affiliate_url not in hrefs:
-        additions.append(f'<p><a href="{escape(product.affiliate_url)}" target="_blank" rel="sponsored noopener nofollow">View the current product listing</a>.</p>')
+        paragraph = soup.new_tag("p")
+        paragraph.append("See the curated product page on ")
+        link = soup.new_tag("a", href=product.source_url)
+        link.string = "eBayMarketplace.biz"
+        link["rel"] = "noopener"
+        paragraph.append(link)
+        paragraph.append(".")
+        soup.append(paragraph)
+
     source_home = current_app.config["SOURCE_SITE_URL"]
     if not any(h.rstrip("/") == source_home.rstrip("/") for h in hrefs):
-        additions.append(f'<p>Visit <a href="{escape(source_home)}">eBayMarketplace.biz</a> to browse more product selections.</p>')
-    return content_html + "\n" + "\n".join(additions)
+        paragraph = soup.new_tag("p")
+        paragraph.append("Browse more product selections at ")
+        link = soup.new_tag("a", href=source_home)
+        link.string = "eBayMarketplace.biz"
+        link["rel"] = "noopener"
+        paragraph.append(link)
+        paragraph.append(".")
+        soup.append(paragraph)
+    return str(soup)
 
 
 def generate_post(product_id: int | None = None, publish: bool | None = None) -> Post:
@@ -575,6 +555,17 @@ def run_seo_audit() -> dict:
             checks.append(("missing-source-link", "The article is missing its curated eBayMarketplace.biz product-page backlink.", True))
         if post.product and post.product.affiliate_url not in hrefs:
             checks.append(("missing-affiliate-link", "The article is missing the product affiliate link.", True))
+        if post.product:
+            matching = [
+                anchor for anchor in soup.select("a[href]")
+                if anchor.get("href", "") == post.product.affiliate_url
+            ]
+            if not matching or matching[0].get_text(" ", strip=True) != post.product.title:
+                checks.append((
+                    "affiliate-anchor-text",
+                    "The affiliate link must use the exact product name as its visible anchor text.",
+                    True,
+                ))
         if not any(h.rstrip("/") == source_home.rstrip("/") for h in hrefs):
             checks.append(("missing-marketplace-link", "The article is missing a contextual link to eBayMarketplace.biz.", True))
         if post.product and not post.product.image_url:
@@ -625,7 +616,7 @@ def apply_seo_fixes() -> int:
         elif issue.issue_type == "meta-description":
             text = post.excerpt or BeautifulSoup(post.content_html, "html.parser").get_text(" ")
             post.meta_description = re.sub(r"\s+", " ", text).strip()[:157].rstrip(" ,;:") + "..."
-        elif issue.issue_type in {"missing-source-link", "missing-affiliate-link", "missing-marketplace-link"} and post.product:
+        elif issue.issue_type in {"missing-source-link", "missing-affiliate-link", "affiliate-anchor-text", "missing-marketplace-link"} and post.product:
             post.content_html = ensure_required_links(post.content_html, post.product)
         else:
             continue
@@ -662,7 +653,6 @@ def run_automation_cycle(force: bool = False) -> dict:
                 details["posts"].append({"error": str(exc)})
                 break
         details["audit"] = run_seo_audit()
-        details["search_console"] = sync_search_console_signals()
         run.status = "completed"
     except Exception as exc:
         current_app.logger.exception("Automation cycle failed")
@@ -673,76 +663,3 @@ def run_automation_cycle(force: bool = False) -> dict:
     db.session.commit()
     return {"status": run.status, **details}
 
-
-def sync_search_console_signals() -> dict:
-    """Convert actionable Search Console signals into the same SEO issue queue."""
-    if OAuthToken.query.filter_by(provider="google_search_console").first() is None:
-        return {"status": "not-connected", "issues": 0}
-    import gsc
-
-    active_keys: set[str] = set()
-    created_or_updated = 0
-    try:
-        for row in gsc.performance_by_page(days=28, row_limit=100):
-            page = (row.get("keys") or [""])[0]
-            impressions = float(row.get("impressions", 0))
-            ctr = float(row.get("ctr", 0))
-            if impressions >= 100 and ctr < 0.01:
-                key = "gsc-low-ctr:" + hashlib.sha1(page.encode()).hexdigest()
-                active_keys.add(key)
-                _upsert_issue(
-                    key,
-                    "search-console-low-ctr",
-                    f"Google Search Console reports {impressions:.0f} impressions and {ctr * 100:.1f}% CTR over the latest available 28-day period. Review the title, description, and search intent before changing content.",
-                    "warning",
-                    page,
-                    False,
-                )
-                created_or_updated += 1
-        for sitemap in gsc.list_sitemaps():
-            errors = int(sitemap.get("errors", 0) or 0)
-            warnings = int(sitemap.get("warnings", 0) or 0)
-            if errors or warnings:
-                path = sitemap.get("path", "sitemap")
-                key = "gsc-sitemap:" + hashlib.sha1(path.encode()).hexdigest()
-                active_keys.add(key)
-                _upsert_issue(
-                    key,
-                    "search-console-sitemap",
-                    f"Search Console reports {errors} sitemap errors and {warnings} warnings for {path}.",
-                    "error" if errors else "warning",
-                    path,
-                    False,
-                )
-                created_or_updated += 1
-        db.session.commit()
-        return {"status": "completed", "issues": created_or_updated}
-    except Exception as exc:
-        db.session.rollback()
-        current_app.logger.exception("Search Console signal sync failed")
-        return {"status": "failed", "error": str(exc), "issues": 0}
-
-
-def record_url_inspection(url: str, result: dict) -> dict:
-    inspection = result.get("inspectionResult", {})
-    index = inspection.get("indexStatusResult", {})
-    verdict = index.get("verdict", "VERDICT_UNSPECIFIED")
-    coverage = index.get("coverageState", "Unknown")
-    key = "gsc-inspection:" + hashlib.sha1(url.encode()).hexdigest()
-    if verdict == "PASS":
-        issue = SEOIssue.query.filter_by(issue_key=key).first()
-        if issue:
-            issue.status = "resolved"
-            issue.resolved_at = utcnow()
-        db.session.commit()
-    else:
-        _upsert_issue(
-            key,
-            "search-console-indexing",
-            f"URL Inspection verdict: {verdict}. Coverage state: {coverage}. Review canonical, robots, sitemap inclusion, content quality, and crawl accessibility.",
-            "warning",
-            url,
-            False,
-        )
-        db.session.commit()
-    return {"verdict": verdict, "coverage": coverage}

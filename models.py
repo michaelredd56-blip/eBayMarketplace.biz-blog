@@ -56,25 +56,6 @@ class Post(db.Model):
     product = db.relationship("Product", back_populates="posts")
 
 
-class OAuthToken(db.Model):
-    __tablename__ = "oauth_tokens"
-
-    id = db.Column(db.Integer, primary_key=True)
-    provider = db.Column(db.String(50), nullable=False, unique=True)
-    encrypted_payload = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
-
-
-class SiteSetting(db.Model):
-    __tablename__ = "site_settings"
-
-    id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(120), nullable=False, unique=True, index=True)
-    value = db.Column(db.Text)
-    updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
-
-
 class SEOIssue(db.Model):
     __tablename__ = "seo_issues"
 
