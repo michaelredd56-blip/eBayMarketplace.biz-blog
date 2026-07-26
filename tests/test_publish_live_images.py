@@ -151,7 +151,10 @@ def test_generated_article_recovers_and_embeds_verified_product_image(monkeypatc
             calls.append((args, kwargs))
             return post
 
-        fake_service_layer = SimpleNamespace(generate_post=original_generate)
+        fake_service_layer = SimpleNamespace(
+            generate_post=original_generate,
+            select_product_for_article=lambda product_id=None: product,
+        )
         install_generation_image_enhancement(fake_service_layer)
 
         # No arguments represents random product generation.
