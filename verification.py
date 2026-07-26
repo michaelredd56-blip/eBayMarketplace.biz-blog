@@ -1,6 +1,15 @@
 from flask import Response
 
-from app import app
+import services as service_layer
+from seo_repairs import apply_seo_fixes, run_seo_audit
+
+# Install the enhanced SEO functions before importing the Flask application.
+# app.py imports these names from services while it registers the admin routes,
+# and the automation cycle resolves run_seo_audit from this module at runtime.
+service_layer.apply_seo_fixes = apply_seo_fixes
+service_layer.run_seo_audit = run_seo_audit
+
+from app import app  # noqa: E402
 
 
 @app.get("/google8fa80b78c101f952.html")
