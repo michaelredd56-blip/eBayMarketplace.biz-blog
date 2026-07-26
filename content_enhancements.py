@@ -56,13 +56,19 @@ def ensure_post_product_image(post: Post | None) -> bool:
     return bool(post and refresh_product_image(post.product))
 
 
-def embed_product_image_in_article(post: Post | None) -> bool:
-    """Insert the selected product's verified image directly into the article body.
+def article_contains_product_image(post: Post | None) -> bool:
+    if not post or not post.product or not valid_image_url(post.product.image_url):
+        return False
+    image_url = post.product.image_url.strip()
+    soup = BeautifulSoup(post.content_html or "", "html.parser")
+    return any(
+        image.get("src", "").strip() == image_url
+        for image in soup.select("img[src]")
+    )
 
-    The generator uses this after it has selected either a random product or a
-    manually requested product. Existing matching images are preserved without
-    adding duplicates.
-    """
+
+def embed_product_image_in_article(post: Post | None) -> bool:
+    """Insert the selected product's verified image directly into the article body."""
     if not post or not post.product or not valid_image_url(post.product.image_url):
         return False
 
@@ -89,8 +95,7 @@ def embed_product_image_in_article(post: Post | None) -> bool:
     caption.string = f"Featured product: {post.product.title}"
     figure.append(caption)
 
-    # Place the image near the top of the written article, immediately before
-    # the first section heading. If no heading exists, make it the first item.
+    # Place the product photo near the top of the written article.
     first_heading = soup.find(["h2", "h3", "h4"])
     if first_heading:
         first_heading.insert_before(figure)
@@ -102,18 +107,59 @@ def embed_product_image_in_article(post: Post | None) -> bool:
 
 
 def install_generation_image_enhancement(service_layer) -> None:
-    """Add the chosen product image to every generated post when available."""
+    """Require every successfully generated article to contain its product image."""
     if getattr(service_layer.generate_post, "_product_image_enhanced", False):
         return
 
+    original_select_product = service_layer.select_product_for_article
     original_generate_post = service_layer.generate_post
 
+    def select_image_ready_product(product_id=None):
+        # A manually selected product remains the requested product, but its image
+        # is recovered before the article is written whenever possible.
+        if product_id:
+            product = original_select_product(product_id)
+            if refresh_product_image(product):
+                db.session.commit()
+            return product
+
+        # Random mode tries several distinct active products and prefers one with
+        # a saved or recoverable image instead of silently choosing a blank record.
+        active_count = Product.query.filter_by(active=True).count()
+        attempts = min(max(active_count, 1), 12)
+        seen_ids: set[int] = set()
+        fallback = None
+
+        for _ in range(attempts):
+            product = original_select_product(None)
+            fallback = product
+            if product.id in seen_ids:
+                continue
+            seen_ids.add(product.id)
+            if refresh_product_image(product):
+                db.session.commit()
+            if valid_image_url(product.image_url):
+                return product
+
+        return fallback or original_select_product(None)
+
+    service_layer.select_product_for_article = select_image_ready_product
+
     def generate_post_with_product_image(*args, **kwargs):
-        # The original generator chooses the product. This works identically for
-        # random generation and for an explicitly supplied product_id.
         post = original_generate_post(*args, **kwargs)
         changed = ensure_post_product_image(post)
         changed = embed_product_image_in_article(post) or changed
+
+        # Do not report success or publish an incomplete image-less article.
+        if not article_contains_product_image(post):
+            title = post.title
+            db.session.delete(post)
+            db.session.commit()
+            raise ValueError(
+                f'No usable product image could be retrieved for “{title}”. '
+                "The incomplete article was not saved. Try generating again or choose another product."
+            )
+
         if changed:
             db.session.commit()
         return post
